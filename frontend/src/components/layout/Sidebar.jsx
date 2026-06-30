@@ -1,0 +1,250 @@
+import { useState, useRef, useEffect } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import {
+  LayoutDashboard, MapPin, Eye, MessageSquare, Users, Mail,
+  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe
+} from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
+import { useBusiness } from '../../contexts/BusinessContext'
+import { useLocations } from '../../contexts/LocationContext'
+import { useClickOutside } from '../../lib/useClickOutside'
+import { faviconUrl } from '../../lib/favicon'
+import { gravatarUrl } from '../../lib/gravatar'
+import EntityAvatar from '../common/EntityAvatar'
+
+const sections = [
+  {
+    title: 'TABLEAU DE BORD',
+    items: [
+      { label: 'Vue d\'ensemble', to: '/dashboard', icon: LayoutDashboard },
+      { label: 'Localisations', to: '/locations', icon: MapPin },
+    ]
+  },
+  {
+    title: 'AVIS',
+    items: [
+      { label: 'Surveillance', to: '/reviews', icon: Eye, count: 0 },
+      { label: 'Répondre', to: '/reviews/reply', icon: MessageSquare, count: 0 },
+    ]
+  },
+  {
+    title: 'CLIENTS',
+    items: [
+      { label: 'Liste clients', to: '/customers', icon: Users, count: 0 },
+      { label: 'Invitations', to: '/invitations', icon: Mail },
+    ]
+  },
+  {
+    title: 'COLLECTE',
+    items: [
+      { label: 'Page de collecte', to: '/parametres-page-collecte', icon: Globe },
+      { label: 'QR Code', to: '/qrcode', icon: QrCode },
+      { label: 'Widgets', to: '/widgets', icon: LayoutTemplate, count: 0 },
+    ]
+  },
+  {
+    title: 'MODULES',
+    items: [
+      { label: 'Concurrence', to: '/competitors', icon: BarChart2, soon: true },
+      { label: 'Publications GBP', to: '/gbp-posts', icon: FileText, soon: true },
+      { label: 'Photos GBP', to: '/gbp-photos', icon: Image, soon: true },
+    ]
+  },
+]
+
+function NavItem({ item }) {
+  const Icon = item.icon
+
+  if (item.soon) {
+    return (
+      <div className="flex items-center justify-between px-3 py-1.5 rounded-lg text-sm text-text-tertiary cursor-default">
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={15} />}
+          <span>{item.label}</span>
+        </div>
+        <span className="text-xs bg-gray-100 text-text-tertiary px-1.5 py-0.5 rounded">bientôt</span>
+      </div>
+    )
+  }
+  return (
+    <NavLink
+      to={item.to}
+      className={({ isActive }) =>
+        `flex items-center justify-between px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          isActive
+            ? 'bg-accent-light text-accent font-medium'
+            : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
+        }`
+      }
+    >
+      <div className="flex items-center gap-2">
+        {Icon && <Icon size={15} />}
+        <span>{item.label}</span>
+      </div>
+      {item.count !== undefined && (
+        <span className="text-xs text-text-tertiary">{item.count}</span>
+      )}
+    </NavLink>
+  )
+}
+
+/* ── Sélecteur de LOCALISATION active (haut de sidebar) ──
+   C'est le périmètre de travail courant (avis, invitations, QR…). */
+function LocationSelector() {
+  const { locations, activeLocation, setActiveLocation } = useLocations()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useClickOutside(ref, () => setOpen(false), open)
+
+  return (
+    <div ref={ref} className="relative px-3 pb-3 border-b border-border">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-colors hover:bg-gray-50 cursor-pointer"
+      >
+        {activeLocation
+          ? <EntityAvatar name={activeLocation.name} src={faviconUrl(activeLocation.website_url)} size={32} />
+          : <div className="w-8 h-8 rounded-lg bg-accent-light flex items-center justify-center text-accent shrink-0"><MapPin size={16} /></div>
+        }
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-text-primary truncate">{activeLocation?.name || 'Aucune localisation'}</p>
+          <p className="text-xs text-text-tertiary truncate">{activeLocation?.address || 'Localisation active'}</p>
+        </div>
+        <ChevronDown size={14} className={`text-text-tertiary shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-3 right-3 top-full mt-1 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+          {locations.map(loc => (
+            <button
+              key={loc.id}
+              onClick={() => { setActiveLocation(loc); setOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-bg-page transition-colors border-b border-border last:border-0 ${loc.id === activeLocation?.id ? 'bg-accent-light' : ''}`}
+            >
+              <EntityAvatar name={loc.name} src={faviconUrl(loc.website_url)} size={28} />
+              <div className="min-w-0">
+                <p className="text-sm text-text-primary truncate">{loc.name}</p>
+                {loc.address && <p className="text-xs text-text-tertiary truncate">{loc.address}</p>}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => { setOpen(false); navigate('/locations') }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-bg-page transition-colors text-accent"
+          >
+            <Plus size={14} className="shrink-0" />
+            <span className="text-sm font-medium">Ajouter une localisation</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Menu COMPTE UTILISATEUR (bas de sidebar) ──
+   Le sous-menu s'étoffera (profil, sécurité, équipe…). */
+function AccountMenu({ user }) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [avatarSrc, setAvatarSrc] = useState(null)
+  const ref = useRef(null)
+  useClickOutside(ref, () => setOpen(false), open)
+
+  useEffect(() => {
+    gravatarUrl(user?.email, 56).then(setAvatarSrc)
+  }, [user?.email])
+
+  function handleLogout() { logout(); navigate('/login') }
+  const displayName = `${user?.firstname || ''} ${user?.lastname || ''}`.trim() || user?.email || 'Utilisateur'
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-gray-50 transition-colors cursor-pointer"
+      >
+        <EntityAvatar name={displayName} src={avatarSrc} size={28} shape="circle" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-text-primary truncate">{displayName}</p>
+          <p className="text-xs text-text-tertiary truncate">{user?.email}</p>
+        </div>
+        <ChevronDown size={13} className={`text-text-tertiary shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+          {/* Sous-menu compte — s'étoffera avec les actions de compte */}
+          <div className="flex items-center justify-between px-3 py-2.5 text-sm text-text-tertiary cursor-default">
+            <span className="flex items-center gap-2"><User size={14} /> Mon compte</span>
+            <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">bientôt</span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-text-secondary hover:bg-red-50 hover:text-danger transition-colors border-t border-border"
+          >
+            <LogOut size={14} /> Se déconnecter
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Sidebar({ user }) {
+  const { activeBusiness } = useBusiness()
+  const { locations = [] } = useLocations() || {}
+  const credits = activeBusiness?.credit_balance ?? 0
+
+  return (
+    <aside className="w-60 bg-white border-r border-border flex flex-col h-screen fixed left-0 top-0">
+      {/* Logo */}
+      <div className="px-4 py-3 border-b border-border">
+        <span className="text-lg font-semibold text-accent">Locagain</span>
+      </div>
+
+      {/* Sélecteur de localisation active */}
+      <div className="px-0 pt-3">
+        <LocationSelector />
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+        {sections.map(section => (
+          <div key={section.title}>
+            <p className="text-xs font-medium text-text-tertiary px-3 mb-1 tracking-wide">{section.title}</p>
+            <div className="space-y-0.5">
+              {section.items.map(item => (
+                <NavItem
+                  key={item.to}
+                  item={item.to === '/locations' ? { ...item, count: locations.length } : item}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Bas de sidebar */}
+      <div className="px-3 py-4 border-t border-border space-y-3">
+        {/* Crédits */}
+        <div className="px-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-text-secondary">Crédits</span>
+            <span className="text-xs font-medium text-text-primary">{credits ?? 0}</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-accent rounded-full" style={{ width: `${Math.min((credits / 500) * 100, 100)}%` }} />
+          </div>
+        </div>
+        {/* Bouton Upgrade */}
+        <button className="w-full bg-accent text-white text-sm font-medium py-2 rounded-lg hover:bg-violet-700 transition-colors">
+          Upgrade
+        </button>
+        {/* Compte utilisateur */}
+        <AccountMenu user={user} />
+      </div>
+    </aside>
+  )
+}
