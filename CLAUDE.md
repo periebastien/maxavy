@@ -47,10 +47,14 @@ npm run build            # build prod
 ```
 
 ## État du projet (mise à jour 2026-06-30)
-Sessions 1–15 terminées. Phase 4 ✅ complète.
-Page collecte + réglages admin (`feedback_page_config`) + QR Code (`qrcode.react`, PNG 1024px + SVG, logo centré si configuré).
-Prochaine session : **16 — Backend clients** (CRUD customers, chiffrement email/tel, consentement horodaté).
+Sessions 1–18 terminées. Phase 5 en cours (16 ✅ 17 ✅ 18 ✅).
+Prochaine session : **19 — Invitations** (email Brevo + SMS Twilio, décrémentation crédits).
 Voir `PROGRESS.md` pour le détail complet.
+
+## Fin de session — checklist obligatoire
+À chaque fin de session (avant le commit) :
+1. Mettre à jour `PROGRESS.md` — ligne de la session passée `⬜` → `✅` avec notes courtes
+2. Mettre à jour `CLAUDE.md` — bloc « État du projet » (sessions terminées, prochaine session)
 
 ## Règles de développement
 - Chaque module = dossier indépendant (`routes.js` + `controller.js` + `service.js`)

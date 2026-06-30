@@ -1,5 +1,5 @@
 # PROGRESS — Locagain MVP
-> Dernière mise à jour : 2026-06-30
+> Dernière mise à jour : 2026-06-30 (session 18)
 > Backend : `node src/app.js` depuis `backend/` → http://localhost:3000
 > Frontend : `npm run dev` depuis `frontend/` → http://localhost:5173
 
@@ -194,9 +194,9 @@
 
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
-| 16 | Backend clients | ⬜ À faire | CRUD customers, chiffrement email/tel, consentement horodaté |
-| 17 | Import CSV | ⬜ À faire | Upload + validation + case consentement obligatoire |
-| 18 | Frontend clients | ⬜ À faire | Liste, statuts, ajout individuel, import CSV |
+| 16 | Backend clients | ✅ Terminé | CRUD customers, chiffrement AES-256-GCM email/tel, consentement horodaté (consent_given_at/by), isolation multi-tenant |
+| 17 | Import CSV | ✅ Terminé | multer + csv-parse, dédup par email, consentement bloquant, réponse {imported, skipped, errors} |
+| 18 | Frontend clients | ✅ Terminé | Liste table, ajout individuel, import CSV drag & drop + modèle téléchargeable, api.upload() |
 | 19 | Invitations | ⬜ À faire | Email (Brevo) + SMS (Twilio), décrémentation crédits |
 
 ## PHASE 6 — AVIS GOOGLE

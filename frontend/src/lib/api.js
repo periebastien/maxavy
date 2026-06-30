@@ -15,12 +15,24 @@ async function request(method, path, body) {
   return data
 }
 
+async function upload(path, formData) {
+  const token = localStorage.getItem('token')
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(path, { method: 'POST', headers, body: formData })
+  if (res.status === 204) return null
+  const data = await res.json()
+  if (!res.ok) throw Object.assign(new Error(data.message || 'Erreur serveur'), { status: res.status })
+  return data
+}
+
 const api = {
   get:    (path)        => request('GET',    path),
   post:   (path, body)  => request('POST',   path, body),
   put:    (path, body)  => request('PUT',    path, body),
   patch:  (path, body)  => request('PATCH',  path, body),
   delete: (path)        => request('DELETE', path),
+  upload,
 }
 
 export default api
