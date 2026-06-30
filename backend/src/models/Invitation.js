@@ -2,12 +2,15 @@ const { DataTypes } = require('sequelize')
 const sequelize = require('../config/database')
 
 const Invitation = sequelize.define('Invitation', {
-  id:          { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-  customer_id: { type: DataTypes.UUID, allowNull: false },
-  business_id: { type: DataTypes.UUID, allowNull: false },
-  channel:     { type: DataTypes.ENUM('email', 'sms', 'whatsapp'), defaultValue: 'email' },
-  sent_at:     { type: DataTypes.DATE },
-  status:      { type: DataTypes.ENUM('pending', 'sent', 'failed'), defaultValue: 'pending' },
+  id:           { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  customer_id:  { type: DataTypes.UUID, allowNull: false },
+  business_id:  { type: DataTypes.UUID, allowNull: false },
+  location_id:  { type: DataTypes.UUID },
+  campaign_id:  { type: DataTypes.UUID },
+  channel:      { type: DataTypes.ENUM('email', 'sms', 'whatsapp'), defaultValue: 'email' },
+  sent_at:      { type: DataTypes.DATE },
+  scheduled_at: { type: DataTypes.DATE },
+  status:       { type: DataTypes.ENUM('pending', 'sent', 'failed'), defaultValue: 'pending' },
 }, {
   tableName: 'invitations',
   underscored: true,

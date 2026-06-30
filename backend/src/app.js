@@ -5,6 +5,7 @@ const helmet = require('helmet')
 const cors = require('cors')
 const rateLimit = require('express-rate-limit')
 const sequelize = require('./config/database')
+const { startScheduledInvitationsJob } = require('./jobs/scheduled-invitations')
 
 const app = express()
 
@@ -23,12 +24,15 @@ app.use('/api/v1/places',    require('./modules/places/places.routes'))
 app.use('/api/v1/public',     require('./modules/public/public.routes'))
 app.use('/api/v1/customers',    require('./modules/customers/customer.routes'))
 app.use('/api/v1/invitations', require('./modules/invitations/invitation.routes'))
+app.use('/api/v1/google',     require('./modules/google/google.routes'))
+app.use('/api/v1/campaigns', require('./modules/campaigns/campaign.routes'))
 
 const PORT = process.env.PORT || 3000
 
 sequelize.authenticate()
   .then(() => {
     console.log('PostgreSQL connecté')
+    startScheduledInvitationsJob()
     app.listen(PORT, () => console.log(`Backend Locagain sur http://localhost:${PORT}`))
   })
   .catch(err => {

@@ -1,5 +1,5 @@
 # PROGRESS — Locagain MVP
-> Dernière mise à jour : 2026-06-30 (session 19)
+> Dernière mise à jour : 2026-06-30 (session 20)
 > Backend : `node src/app.js` depuis `backend/` → http://localhost:3000
 > Frontend : `npm run dev` depuis `frontend/` → http://localhost:5173
 
@@ -198,12 +198,13 @@
 | 17 | Import CSV | ✅ Terminé | multer + csv-parse, dédup par email, consentement bloquant, réponse {imported, skipped, errors} |
 | 18 | Frontend clients | ✅ Terminé | Liste table, ajout individuel, import CSV drag & drop + modèle téléchargeable, api.upload() |
 | 19 | Invitations | ✅ Terminé | Email Brevo (template HTML, lien collecte), décrémentation credit_balance + historique credits, statut customer → invited. SMS stub (Twilio trial sans numéro). |
+| 19b | Campagnes & scalabilité | ✅ Terminé | Page Invitations : campagnes avec cadence (X/jour ou X/semaine), cron job envoi planifié, pause/reprise/annulation. Page Clients : icônes canal par invitation reçue (✉×N, 📱×N). Endpoints stats + search (50 résultats, déchiffrement partiel) pour scalabilité 5000+ clients. |
 
 ## PHASE 6 — AVIS GOOGLE
 
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
-| 20 | OAuth Google Business Profile | ⬜ À faire | Token chiffré AES-256-GCM |
+| 20 | OAuth Google Business Profile | ✅ Terminé | Flow OAuth2 complet (state JWT signé, tokens AES-256-GCM), modèle GoogleConnection, section Settings connect/disconnect. ⚠️ Ajouter `http://localhost:3000/api/v1/google/callback` dans Google Cloud Console → Identifiants → URI de redirection autorisés. |
 | 21 | Sync avis | ⬜ À faire | Cron quotidien, table reviews |
 | 22 | Interface avis | ⬜ À faire | Liste, filtres, réponse |
 
@@ -291,6 +292,8 @@ VITE_GOOGLE_CLIENT_ID=...
 14. add-website-to-locations (`locations.website_url` — sert au favicon/logo)
 15. add-slug-to-locations (`locations.slug` + backfill + index unique `business_id,slug` — URL publique de collecte)
 16. create-private-feedbacks (retours note ≤ 3 de la page de collecte)
+17. add-email-to-google-connections (`google_account_email` VARCHAR — appliqué via ALTER TABLE direct)
+18. create-invitation-campaigns (table `invitation_campaigns` + colonnes `campaign_id`, `scheduled_at`, `location_id` dans `invitations` — appliqué via ALTER TABLE direct)
 
 ### Bugs corrigés — ne pas reproduire
 

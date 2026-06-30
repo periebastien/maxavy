@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Users, Plus, Upload, X, Check, AlertCircle, FileText, Trash2, Mail, Phone } from 'lucide-react'
+import { Users, Plus, Upload, X, Check, AlertCircle, FileText, Trash2, Mail, Phone, MessageCircle } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
@@ -10,6 +10,37 @@ import api from '../lib/api'
 
 const STATUS_LABEL = { pending: 'En attente', invited: 'Invité', reviewed: 'A laissé un avis' }
 const STATUS_VARIANT = { pending: 'neutral', invited: 'accent', reviewed: 'success' }
+
+const CHANNEL_ICON = { email: Mail, sms: Phone, whatsapp: MessageCircle }
+const CHANNEL_LABEL = { email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp' }
+
+function InvitationBadges({ invitations }) {
+  if (!invitations?.length) return <span className="text-xs text-text-tertiary">—</span>
+  const byChannel = {}
+  for (const inv of invitations) {
+    if (!byChannel[inv.channel]) byChannel[inv.channel] = []
+    byChannel[inv.channel].push(inv)
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {Object.entries(byChannel).map(([channel, invs]) => {
+        const Icon = CHANNEL_ICON[channel] || Mail
+        const last = invs[invs.length - 1]
+        const date = last.sent_at ? new Date(last.sent_at).toLocaleDateString('fr-FR') : ''
+        return (
+          <span
+            key={channel}
+            title={`${CHANNEL_LABEL[channel]} — ${date}${invs.length > 1 ? ` (${invs.length}×)` : ''}`}
+            className="inline-flex items-center gap-0.5 text-text-secondary"
+          >
+            <Icon size={13} />
+            {invs.length > 1 && <span className="text-xs">×{invs.length}</span>}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
 
 const emptyForm = { firstname: '', lastname: '', email: '', phone: '', consent_given: false }
 
@@ -300,6 +331,7 @@ export default function CustomersPage() {
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-tertiary">Email</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-tertiary hidden md:table-cell">Téléphone</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-tertiary">Statut</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-text-tertiary hidden md:table-cell">Invitations</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-text-tertiary hidden md:table-cell">Consentement</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -314,6 +346,9 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-text-secondary hidden md:table-cell">{c.phone || '—'}</td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_VARIANT[c.status] || 'neutral'}>{STATUS_LABEL[c.status] || c.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <InvitationBadges invitations={c.invitations} />
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {c.consent_given

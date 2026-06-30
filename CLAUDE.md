@@ -46,9 +46,17 @@ npm run dev              # port 5173
 npm run build            # build prod
 ```
 
+## Gestion du backend
+- **Redémarrer le backend moi-même** à chaque fois que c'est nécessaire (nouvelles routes, modification de app.js, nouveau module, etc.)
+- Tuer **uniquement** le process sur le port 3000 : `Get-NetTCPConnection -LocalPort 3000 | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1` → récupérer le PID, puis `Stop-Process -Id <PID> -Force`
+- **Ne jamais faire `Get-Process node | Stop-Process`** — ça tue aussi le serveur Vite frontend (port 5173)
+- Si le Vite est mort par erreur : `cd frontend && npm run dev` en arrière-plan
+- Relancer le backend : `cd backend && node src/app.js` en arrière-plan
+- Vérifier que les logs affichent `PostgreSQL connecté` et `[cron] Job invitations planifiées démarré`
+
 ## État du projet (mise à jour 2026-06-30)
-Sessions 1–19 terminées. Phase 5 complète (16 ✅ 17 ✅ 18 ✅ 19 ✅).
-Prochaine session : **20 — OAuth Google Business Profile** (flow OAuth2, tokens chiffrés, table google_connections).
+Sessions 1–20 terminées. Phase 5 complète + Phase 6 démarrée (19b ✅ 20 ✅).
+Prochaine session : **21 — Sync avis Google** (cron quotidien GMB API, table reviews, liste avis).
 Voir `PROGRESS.md` pour le détail complet.
 
 ## Fin de session — checklist obligatoire

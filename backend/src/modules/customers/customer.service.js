@@ -1,5 +1,6 @@
 const Customer = require('../../models/Customer')
 const Business = require('../../models/Business')
+const Invitation = require('../../models/Invitation')
 const { assertAccess } = require('../businesses/business.service')
 const { encrypt, decrypt } = require('../../config/encryption')
 
@@ -37,11 +38,22 @@ async function create(data, businessId, userId) {
 async function list(businessId, userId) {
   if (!businessId) throw { status: 400, message: 'business_id requis' }
   await assertBusinessAccess(businessId, userId)
-  const customers = await Customer.findAll({
-    where: { business_id: businessId },
-    order: [['created_at', 'DESC']],
+  const [customers, invitations] = await Promise.all([
+    Customer.findAll({ where: { business_id: businessId }, order: [['created_at', 'DESC']] }),
+    Invitation.findAll({ where: { business_id: businessId, status: 'sent' }, order: [['sent_at', 'ASC']] }),
+  ])
+
+  const invsByCustomer = {}
+  for (const inv of invitations) {
+    if (!invsByCustomer[inv.customer_id]) invsByCustomer[inv.customer_id] = []
+    invsByCustomer[inv.customer_id].push({ channel: inv.channel, sent_at: inv.sent_at })
+  }
+
+  return customers.map(c => {
+    const plain = decryptCustomer(c)
+    plain.invitations = invsByCustomer[c.id] || []
+    return plain
   })
-  return customers.map(decryptCustomer)
 }
 
 async function getOne(id, userId) {
@@ -77,4 +89,37 @@ async function remove(id, userId) {
   await customer.destroy()
 }
 
-module.exports = { create, list, getOne, update, remove }
+async function stats(businessId, userId) {
+  await assertBusinessAccess(businessId, userId)
+  const [total, uninvited, invited, reviewed] = await Promise.all([
+    Customer.count({ where: { business_id: businessId } }),
+    Customer.count({ where: { business_id: businessId, status: 'pending' } }),
+    Customer.count({ where: { business_id: businessId, status: 'invited' } }),
+    Customer.count({ where: { business_id: businessId, status: 'reviewed' } }),
+  ])
+  return { total, uninvited, invited, reviewed }
+}
+
+async function search(businessId, userId, q, limit = 50) {
+  await assertBusinessAccess(businessId, userId)
+  const all = await Customer.findAll({
+    where: { business_id: businessId },
+    order: [['created_at', 'DESC']],
+  })
+  const qLower = (q || '').toLowerCase().trim()
+  const matches = []
+  for (const c of all) {
+    if (matches.length >= limit) break
+    const email = decrypt(c.email) || ''
+    const name = [c.firstname, c.lastname].filter(Boolean).join(' ').toLowerCase()
+    if (!qLower || name.includes(qLower) || email.toLowerCase().includes(qLower)) {
+      const plain = c.toJSON()
+      plain.email = email
+      plain.phone = decrypt(c.phone)
+      matches.push(plain)
+    }
+  }
+  return matches
+}
+
+module.exports = { create, list, getOne, update, remove, stats, search }

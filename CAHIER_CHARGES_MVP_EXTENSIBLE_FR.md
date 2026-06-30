@@ -254,7 +254,22 @@ Référence : capture de la page "Feedback Page" de ReputeUp fournie par toi. C'
 - Si la case n'est pas cochée → import bloqué, message explicatif
 - Envoi d'invitation par email (SendGrid/Brevo)
 - Envoi d'invitation par SMS (Twilio) — si crédits suffisants
-- Liste des clients avec statut (en attente / avis reçu / non envoyé)
+
+#### Liste des clients
+- Statut général du client : `Non invité` / `Invité` / `Avis déposé`
+- Pour chaque client, affichage de **toutes les invitations reçues** : une icône par canal utilisé (✉ email, 📱 SMS) avec la date au survol. Si email + SMS envoyés → deux icônes distinctes côte à côte.
+- Si un client a reçu plusieurs invitations sur le même canal, le nombre est affiché (ex : ✉×2)
+
+#### Page Invitations — Envoi en masse avec cadence
+La page `/invitations` est dédiée à la gestion des **campagnes d'invitation groupées** :
+
+1. **Créer une campagne** : sélectionner N clients (multi-select avec filtres), choisir le canal (email/SMS), définir la cadence (X invitations/jour ou X invitations/semaine)
+2. **Planification automatique** : le backend calcule les `scheduled_at` pour chaque invitation selon la cadence choisie et crée des enregistrements `status='pending'`
+3. **Exécution** : un job `node-cron` tourne toutes les minutes, envoie les invitations `pending` dont `scheduled_at <= maintenant`, décrémente les crédits au fil de l'eau
+4. **Suivi** : la liste des campagnes affiche la progression (X/N envoyées, % d'avancement, statut : en cours / terminée / en pause)
+
+Table `invitation_campaigns` : `id`, `business_id`, `name`, `channel`, `rate_per_day` ou `rate_per_week`, `location_id`, `status` (running/paused/completed/cancelled), `created_at`
+Champ `campaign_id` et `scheduled_at` ajoutés à la table `invitations`.
 
 ### MODULE 7 — SURVEILLANCE DES AVIS GOOGLE
 **Routes API :** `/api/reviews/*`, `/api/google/*`

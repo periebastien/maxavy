@@ -13,6 +13,7 @@ import LocationsPage from './pages/LocationsPage'
 import CollectSettingsPage from './pages/CollectSettingsPage'
 import QRCodePage from './pages/QRCodePage'
 import CustomersPage from './pages/CustomersPage'
+import InvitationsPage from './pages/InvitationsPage'
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage    = lazy(() => import('./pages/CollectPage'))
 
@@ -49,6 +50,7 @@ export default function App() {
       <Route path="/parametres-page-collecte"  element={<PrivateRoute><RequireBusiness><CollectSettingsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/qrcode"                   element={<PrivateRoute><RequireBusiness><QRCodePage /></RequireBusiness></PrivateRoute>} />
       <Route path="/customers"               element={<PrivateRoute><RequireBusiness><CustomersPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/invitations"             element={<PrivateRoute><RequireBusiness><InvitationsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>

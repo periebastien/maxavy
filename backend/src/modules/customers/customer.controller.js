@@ -61,4 +61,23 @@ async function importFromCsv(req, res) {
   }
 }
 
-module.exports = { create, list, getOne, update, destroy, importFromCsv }
+async function stats(req, res) {
+  try {
+    const result = await service.stats(req.query.business_id, req.user.id)
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+async function search(req, res) {
+  try {
+    const { business_id, q, limit } = req.query
+    const results = await service.search(business_id, req.user.id, q, limit ? Number(limit) : 50)
+    res.json(results)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+module.exports = { create, list, getOne, update, destroy, importFromCsv, stats, search }
