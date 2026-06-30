@@ -1,5 +1,5 @@
 # PROGRESS — Locagain MVP
-> Dernière mise à jour : 2026-06-30 (session 18)
+> Dernière mise à jour : 2026-06-30 (session 19)
 > Backend : `node src/app.js` depuis `backend/` → http://localhost:3000
 > Frontend : `npm run dev` depuis `frontend/` → http://localhost:5173
 
@@ -197,7 +197,7 @@
 | 16 | Backend clients | ✅ Terminé | CRUD customers, chiffrement AES-256-GCM email/tel, consentement horodaté (consent_given_at/by), isolation multi-tenant |
 | 17 | Import CSV | ✅ Terminé | multer + csv-parse, dédup par email, consentement bloquant, réponse {imported, skipped, errors} |
 | 18 | Frontend clients | ✅ Terminé | Liste table, ajout individuel, import CSV drag & drop + modèle téléchargeable, api.upload() |
-| 19 | Invitations | ⬜ À faire | Email (Brevo) + SMS (Twilio), décrémentation crédits |
+| 19 | Invitations | ✅ Terminé | Email Brevo (template HTML, lien collecte), décrémentation credit_balance + historique credits, statut customer → invited. SMS stub (Twilio trial sans numéro). |
 
 ## PHASE 6 — AVIS GOOGLE
 

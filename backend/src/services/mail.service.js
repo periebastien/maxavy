@@ -36,4 +36,31 @@ async function sendResetEmail(to, resetUrl) {
   })
 }
 
-module.exports = { sendResetEmail }
+async function sendInvitationEmail({ to, firstname, businessName, collectUrl }) {
+  await transporter.sendMail({
+    from: `"${businessName}" <${process.env.MAIL_FROM}>`,
+    to,
+    subject: `${businessName} — Votre avis compte pour nous`,
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+        <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Votre avis nous intéresse</h2>
+        <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
+          ${firstname ? `Bonjour ${firstname},<br><br>` : ''}
+          L'équipe de <strong>${businessName}</strong> aimerait connaître votre expérience.<br>
+          Cela prend moins d'une minute.
+        </p>
+        <a href="${collectUrl}"
+           style="display:inline-block;background:#7C5CFC;color:#fff;font-size:14px;font-weight:600;
+                  padding:12px 28px;border-radius:8px;text-decoration:none;">
+          Donner mon avis
+        </a>
+        <p style="color:#9B9BA8;font-size:12px;margin:24px 0 0;">
+          Vous recevez ce message car vous êtes client de ${businessName}.<br>
+          Si vous ne souhaitez plus recevoir nos emails, contactez-nous.
+        </p>
+      </div>
+    `,
+  })
+}
+
+module.exports = { sendResetEmail, sendInvitationEmail }

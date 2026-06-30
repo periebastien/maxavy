@@ -21,7 +21,8 @@ app.use('/api/v1/businesses', require('./modules/businesses/business.routes'))
 app.use('/api/v1/locations',  require('./modules/locations/location.routes'))
 app.use('/api/v1/places',    require('./modules/places/places.routes'))
 app.use('/api/v1/public',     require('./modules/public/public.routes'))
-app.use('/api/v1/customers', require('./modules/customers/customer.routes'))
+app.use('/api/v1/customers',    require('./modules/customers/customer.routes'))
+app.use('/api/v1/invitations', require('./modules/invitations/invitation.routes'))
 
 const PORT = process.env.PORT || 3000
 

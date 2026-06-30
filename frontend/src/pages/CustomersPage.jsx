@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { Users, Plus, Upload, X, Check, AlertCircle, FileText, Trash2 } from 'lucide-react'
+import { Users, Plus, Upload, X, Check, AlertCircle, FileText, Trash2, Mail, Phone } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
 import Badge from '../components/common/Badge'
 import { useBusiness } from '../contexts/BusinessContext'
+import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
 
 const STATUS_LABEL = { pending: 'En attente', invited: 'Invité', reviewed: 'A laissé un avis' }
@@ -13,7 +14,8 @@ const STATUS_VARIANT = { pending: 'neutral', invited: 'accent', reviewed: 'succe
 const emptyForm = { firstname: '', lastname: '', email: '', phone: '', consent_given: false }
 
 export default function CustomersPage() {
-  const { activeBusiness } = useBusiness()
+  const { activeBusiness, refresh: refreshBusiness } = useBusiness()
+  const { locations, activeLocation } = useLocations()
 
   const [customers, setCustomers]   = useState([])
   const [isLoading, setIsLoading]   = useState(true)
@@ -30,6 +32,12 @@ export default function CustomersPage() {
   const [importError, setImportError]   = useState('')
   const [dragging, setDragging]     = useState(false)
   const fileInputRef = useRef(null)
+
+  const [inviteModal, setInviteModal]         = useState(null)
+  const [inviteChannel, setInviteChannel]     = useState('email')
+  const [inviteLocationId, setInviteLocationId] = useState('')
+  const [inviting, setInviting]               = useState(false)
+  const [inviteError, setInviteError]         = useState('')
 
   async function load() {
     if (!activeBusiness) return
@@ -90,6 +98,31 @@ export default function CustomersPage() {
       setImportError(err.message)
     } finally {
       setImporting(false)
+    }
+  }
+
+  function openInvite(customer) {
+    setInviteModal(customer)
+    setInviteChannel(customer.email ? 'email' : 'sms')
+    setInviteLocationId(activeLocation?.id || locations[0]?.id || '')
+    setInviteError('')
+  }
+
+  async function handleInvite() {
+    setInviting(true); setInviteError('')
+    try {
+      await api.post('/api/v1/invitations', {
+        customer_id:  inviteModal.id,
+        channel:      inviteChannel,
+        location_id:  inviteLocationId,
+        business_id:  activeBusiness.id,
+      })
+      await Promise.all([load(), refreshBusiness()])
+      setInviteModal(null)
+    } catch (err) {
+      setInviteError(err.message)
+    } finally {
+      setInviting(false)
     }
   }
 
@@ -289,9 +322,14 @@ export default function CustomersPage() {
                       }
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDelete(c)} title="Supprimer" className="p-1.5 rounded text-text-tertiary hover:text-danger hover:bg-red-50 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openInvite(c)} title="Envoyer une invitation" className="p-1.5 rounded text-text-tertiary hover:text-accent hover:bg-accent-light transition-colors">
+                          <Mail size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(c)} title="Supprimer" className="p-1.5 rounded text-text-tertiary hover:text-danger hover:bg-red-50 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -303,6 +341,64 @@ export default function CustomersPage() {
           </div>
         )}
       </div>
+      {/* Modal invitation */}
+      {inviteModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-text-primary">Envoyer une invitation</p>
+              <button onClick={() => setInviteModal(null)} className="text-text-tertiary hover:text-text-primary"><X size={16} /></button>
+            </div>
+
+            <p className="text-sm text-text-secondary">
+              {[inviteModal.firstname, inviteModal.lastname].filter(Boolean).join(' ') || inviteModal.email}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setInviteChannel('email')}
+                disabled={!inviteModal.email}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm border transition-colors ${inviteChannel === 'email' ? 'border-accent bg-accent-light text-accent font-medium' : 'border-border text-text-secondary hover:border-accent/50'} disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <Mail size={13} /> Email
+              </button>
+              <button
+                onClick={() => setInviteChannel('sms')}
+                disabled={!inviteModal.phone}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm border transition-colors ${inviteChannel === 'sms' ? 'border-accent bg-accent-light text-accent font-medium' : 'border-border text-text-secondary hover:border-accent/50'} disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <Phone size={13} /> SMS
+              </button>
+            </div>
+
+            {locations.length > 1 && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-text-tertiary">Localisation</label>
+                <select
+                  value={inviteLocationId}
+                  onChange={e => setInviteLocationId(e.target.value)}
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm text-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
+                >
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}{l.address ? ` — ${l.address}` : ''}</option>)}
+                </select>
+              </div>
+            )}
+
+            {inviteError && (
+              <div className="flex items-start gap-2 text-sm text-danger">
+                <AlertCircle size={14} className="shrink-0 mt-0.5" />{inviteError}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <Button onClick={handleInvite} disabled={inviting}>
+                {inviting ? 'Envoi…' : 'Envoyer'}
+              </Button>
+              <Button variant="secondary" onClick={() => setInviteModal(null)} disabled={inviting}>Annuler</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

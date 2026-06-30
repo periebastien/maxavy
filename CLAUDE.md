@@ -47,8 +47,8 @@ npm run build            # build prod
 ```
 
 ## État du projet (mise à jour 2026-06-30)
-Sessions 1–18 terminées. Phase 5 en cours (16 ✅ 17 ✅ 18 ✅).
-Prochaine session : **19 — Invitations** (email Brevo + SMS Twilio, décrémentation crédits).
+Sessions 1–19 terminées. Phase 5 complète (16 ✅ 17 ✅ 18 ✅ 19 ✅).
+Prochaine session : **20 — OAuth Google Business Profile** (flow OAuth2, tokens chiffrés, table google_connections).
 Voir `PROGRESS.md` pour le détail complet.
 
 ## Fin de session — checklist obligatoire
