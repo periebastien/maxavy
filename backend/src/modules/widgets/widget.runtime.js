@@ -145,19 +145,20 @@ function LOCAGAIN_RUNTIME() {
       inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + cnt + '</strong>'
     }
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
-    var alignItems = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
+    var justify = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
       + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:18px 30px;background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + (b.shape === 'square' ? '6px' : '14px') + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
       + '.lcg-bf-label{font-size:17px;font-weight:500;color:' + pal.text + '}'
       + '.lcg-bf-line{font-size:13px;color:' + pal.muted + '}'
-      + '.lcg-wrap{display:flex;flex-direction:column;align-items:' + alignItems + ';padding:' + cpad + 'px}'
+      + '.lcg-wrap{display:flex;justify-content:' + justify + ';padding:' + cpad + 'px}'
+      + '.lcg-wrap-inner{display:flex;flex-direction:column;align-items:center}'
     var body = payload.style === 'framed'
       ? inner
       : '<span class="lcg-bc">' + inner + '</span>'
     if (payload.googleUrl) body = '<a class="lcg-link" href="' + esc(payload.googleUrl) + '" target="_blank" rel="noopener nofollow">' + body + '</a>'
-    var content = '<div class="lcg-wrap">' + body + (pbHtml || '') + '</div>'
+    var content = '<div class="lcg-wrap"><div class="lcg-wrap-inner">' + body + (pbHtml || '') + '</div></div>'
     return { css: css, html: content }
   }
 
