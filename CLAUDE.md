@@ -54,12 +54,13 @@ npm run build            # build prod
 - Relancer le backend : `cd backend && node src/app.js` en arrière-plan
 - Vérifier que les logs affichent `PostgreSQL connecté` et `[cron] Job invitations planifiées démarré`
 
-## État du projet (mise à jour 2026-06-30)
+## État du projet (mise à jour 2026-07-01)
 Sessions 1–26 terminées. Phase 7 complète. Phase 6 bloquée (quota GMB = 0, projet Cloud non vérifié).
 Phase 6 (sessions 21–22) : code complet mais en attente déblocage quota `mybusinessaccountmanagement.googleapis.com`. Migration 19 (`reply_time`) à appliquer quand débloqué.
 Phase 8 — sessions 26, 26b, 27 terminées (widgets backend + tags + carrousel/badge runtime + builder). Session 28 largement couverte en 27 (reste : polish badge, grep anti-fuite, « lire plus »).
 Design system widgets (catalogue 5 widgets + modèle de config + gabarits) : **`WIDGETS_DESIGN_FR.md`**.
 Responsive (2026-07-01) : cahier des charges §8.7 ajouté (full responsive, mobile-first) + **admin rendu full responsive** (sidebar en drawer + burger, grilles adaptatives) — session 33 partielle (reste états vides/loaders). Compte de test preview en mémoire.
+Widgets — polish badge (2026-07-01) : option `containerPadding` (marge intérieure), défaut `align` passé à `center`, « Propulsé par Locagain » toujours centré sous le badge (jamais flush sur son bord gauche/droit) — voir `WIDGETS_DESIGN_FR.md` §3.1.
 Prochaine session : **28 (finitions widgets)** puis **29 — Paramètres entreprise**. Bug corrigé (2026-07-01) : modèle `Review` avait `updated_at` absent de la table → cassait toute lecture d'avis, fix `updatedAt: false`. Config Stripe (clés + stripe_price_id des plans) à faire séparément.
 Voir `PROGRESS.md` pour le détail complet.
 
