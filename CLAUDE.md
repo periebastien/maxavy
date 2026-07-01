@@ -46,13 +46,18 @@ npm run dev              # port 5173
 npm run build            # build prod
 ```
 
-## Gestion du backend
-- **Redémarrer le backend moi-même** à chaque fois que c'est nécessaire (nouvelles routes, modification de app.js, nouveau module, etc.)
-- Tuer **uniquement** le process sur le port 3000 : `Get-NetTCPConnection -LocalPort 3000 | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1` → récupérer le PID, puis `Stop-Process -Id <PID> -Force`
-- **Ne jamais faire `Get-Process node | Stop-Process`** — ça tue aussi le serveur Vite frontend (port 5173)
-- Si le Vite est mort par erreur : `cd frontend && npm run dev` en arrière-plan
-- Relancer le backend : `cd backend && node src/app.js` en arrière-plan
-- Vérifier que les logs affichent `PostgreSQL connecté` et `[cron] Job invitations planifiées démarré`
+## Gestion des serveurs (2 process, 2 ports)
+Deux serveurs distincts tournent en parallèle — ne jamais confondre :
+- **Backend** — port **3000** (`node src/app.js` depuis `backend/`)
+- **Frontend Vite** — port **5173** (`npm run dev` depuis `frontend/`)
+
+**Redémarrer le backend moi-même** à chaque fois que nécessaire (nouvelles routes, modif `app.js`, nouveau module, changement dans un module backend comme `widget.runtime.js`, etc.) :
+1. Tuer **uniquement** le process du port concerné : `Get-NetTCPConnection -LocalPort 3000 | Select-Object -ExpandProperty OwningProcess | Select-Object -First 1` → récupérer le PID, puis `Stop-Process -Id <PID> -Force` (remplacer `3000` par `5173` pour le frontend)
+2. **Ne jamais faire `Get-Process node | Stop-Process`** — ça tue les DEUX serveurs (backend 3000 **et** Vite 5173)
+3. Relancer : backend `cd backend && node src/app.js` en arrière-plan ; frontend (si mort par erreur) `cd frontend && npm run dev` en arrière-plan
+4. Vérifier les logs backend : `PostgreSQL connecté` et `[cron] Job invitations planifiées démarré`
+
+Note : le frontend Vite a du hot-reload (HMR) → il redémarre rarement ; le backend, lui, doit être relancé à la main après toute modif backend.
 
 ## État du projet (mise à jour 2026-07-01)
 Sessions 1–26 terminées. Phase 7 complète. Phase 6 bloquée (quota GMB = 0, projet Cloud non vérifié).
