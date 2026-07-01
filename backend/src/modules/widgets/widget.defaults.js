@@ -19,7 +19,7 @@ const COMMON_DEFAULTS = {
 const BADGE_DEFAULTS = {
   shape: 'pill',
   size: 'medium',
-  align: 'left',
+  align: 'center',
   showShadow: true,
   showAvatars: true,
   avatarsCount: 4,

@@ -32,7 +32,7 @@ const COMMON = {
   showGoogleLogo: true, showGoogleLabel: true, googleUrl: '', showPoweredBy: true,
 }
 const BADGE = {
-  shape: 'pill', size: 'medium', align: 'left', showShadow: true,
+  shape: 'pill', size: 'medium', align: 'center', showShadow: true,
   showAvatars: true, avatarsCount: 4, showStars: true, starStyle: 'fractional',
   showRatingValue: true, showReviewCount: true, qualityLabel: 'auto', ctaText: '',
 }

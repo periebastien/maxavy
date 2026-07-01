@@ -125,7 +125,7 @@ function LOCAGAIN_RUNTIME() {
   }
 
   // ---- BADGE ----
-  function badgeHtml(payload, pal) {
+  function badgeHtml(payload, pal, pbHtml) {
     var cfg = payload.config, b = cfg.badge, c = cfg.common
     var avg = payload.aggregate.average, count = payload.aggregate.count
     var radius = b.shape === 'square' ? '6px' : b.shape === 'rounded' ? '12px' : '999px'
@@ -145,19 +145,19 @@ function LOCAGAIN_RUNTIME() {
       inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + cnt + '</strong>'
     }
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
+    var alignItems = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
       + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:18px 30px;background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + (b.shape === 'square' ? '6px' : '14px') + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
       + '.lcg-bf-label{font-size:17px;font-weight:500;color:' + pal.text + '}'
       + '.lcg-bf-line{font-size:13px;color:' + pal.muted + '}'
-      + '.lcg-wrap{display:flex;justify-content:' + (b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start') + ';padding:' + cpad + 'px}'
-    var cls = payload.style === 'framed' ? 'lcg-bf-wrap' : 'lcg-bc'
+      + '.lcg-wrap{display:flex;flex-direction:column;align-items:' + alignItems + ';padding:' + cpad + 'px}'
     var body = payload.style === 'framed'
       ? inner
       : '<span class="lcg-bc">' + inner + '</span>'
-    var content = '<div class="lcg-wrap">' + body + '</div>'
-    if (payload.googleUrl) content = '<a class="lcg-link" href="' + esc(payload.googleUrl) + '" target="_blank" rel="noopener nofollow">' + content + '</a>'
+    if (payload.googleUrl) body = '<a class="lcg-link" href="' + esc(payload.googleUrl) + '" target="_blank" rel="noopener nofollow">' + body + '</a>'
+    var content = '<div class="lcg-wrap">' + body + (pbHtml || '') + '</div>'
     return { css: css, html: content }
   }
 
@@ -274,11 +274,12 @@ function LOCAGAIN_RUNTIME() {
     var cfg = payload.config
     var pal = resolve(cfg)
     loadFont(root, pal.fontKey)
-    var part = payload.type === 'badge' ? badgeHtml(payload, pal) : carouselHtml(payload, pal)
-    var pb = cfg.common.showPoweredBy
+    var pbHtml = cfg.common.showPoweredBy
       ? '<div class="lcg-pb"><a href="https://locagain.com" target="_blank" rel="noopener">Propulsé par Locagain</a></div>'
       : ''
-    root.innerHTML = '<style>' + baseCss(pal, cfg) + part.css + '</style><div class="lcg-root">' + part.html + pb + '</div>'
+    var part = payload.type === 'badge' ? badgeHtml(payload, pal, pbHtml) : carouselHtml(payload, pal)
+    var outerPb = payload.type === 'badge' ? '' : pbHtml
+    root.innerHTML = '<style>' + baseCss(pal, cfg) + part.css + '</style><div class="lcg-root">' + part.html + outerPb + '</div>'
     if (payload.type === 'carousel' && payload.style === 'slider') initSlider(root, cfg)
   }
 

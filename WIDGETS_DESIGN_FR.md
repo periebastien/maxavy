@@ -124,7 +124,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 |-----|-------|------|--------|------------------|--------------|
 | `shape` | Forme | enum | `pill` | `pill` `rounded` `square` | compact→`pill`, framed→`rounded` |
 | `size` | Taille | enum | `medium` | `small` `medium` `large` | both |
-| `align` | Alignement | enum | `left` | `left` `center` `right` | framed souvent `center` |
+| `align` | Alignement | enum | `center` | `left` `center` `right` | le bloc « Propulsé par Locagain » suit toujours cet alignement (même bord gauche/droit ou centré) |
 | `showShadow` | Ombre | bool | `true` | | both |
 | `showAvatars` | Avatars | bool | `true` | | both |
 | `avatarsCount` | Nombre d'avatars | number | `4` | 1–8 (borné à `reviews.length`) | both |
