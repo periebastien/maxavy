@@ -2,6 +2,7 @@ const { Op } = require('sequelize')
 const Business = require('../../models/Business')
 const TeamMember = require('../../models/TeamMember')
 const Location = require('../../models/Location')
+const { grantWelcomeCredits } = require('../credits/credits.service')
 
 function slugify(str) {
   return str
@@ -31,6 +32,7 @@ async function create({ name, website_url, country, timezone }, userId) {
     timezone:    timezone    || 'Europe/Paris',
     owner_id:    userId,
   })
+  await grantWelcomeCredits(business.id)
   return business
 }
 

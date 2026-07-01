@@ -14,6 +14,11 @@ import CollectSettingsPage from './pages/CollectSettingsPage'
 import QRCodePage from './pages/QRCodePage'
 import CustomersPage from './pages/CustomersPage'
 import InvitationsPage from './pages/InvitationsPage'
+import ReviewsPage from './pages/ReviewsPage'
+import CreditsPage from './pages/CreditsPage'
+import PricingPage from './pages/PricingPage'
+import WidgetsPage from './pages/WidgetsPage'
+import WidgetBuilderPage from './pages/WidgetBuilderPage'
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage    = lazy(() => import('./pages/CollectPage'))
 
@@ -51,6 +56,12 @@ export default function App() {
       <Route path="/qrcode"                   element={<PrivateRoute><RequireBusiness><QRCodePage /></RequireBusiness></PrivateRoute>} />
       <Route path="/customers"               element={<PrivateRoute><RequireBusiness><CustomersPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/invitations"             element={<PrivateRoute><RequireBusiness><InvitationsPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/reviews"                 element={<PrivateRoute><RequireBusiness><ReviewsPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/widgets"                 element={<PrivateRoute><RequireBusiness><WidgetsPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/widgets/new"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/widgets/:id"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>

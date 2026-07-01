@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Eye, MessageSquare, Users, Mail,
-  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe
+  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBusiness } from '../../contexts/BusinessContext'
@@ -23,8 +23,8 @@ const sections = [
   {
     title: 'AVIS',
     items: [
-      { label: 'Surveillance', to: '/reviews', icon: Eye, count: 0 },
-      { label: 'Répondre', to: '/reviews/reply', icon: MessageSquare, count: 0 },
+      { label: 'Surveillance', to: '/reviews', icon: Eye },
+      { label: 'Répondre', to: '/reviews/reply', icon: MessageSquare, soon: true },
     ]
   },
   {
@@ -48,6 +48,13 @@ const sections = [
       { label: 'Concurrence', to: '/competitors', icon: BarChart2, soon: true },
       { label: 'Publications GBP', to: '/gbp-posts', icon: FileText, soon: true },
       { label: 'Photos GBP', to: '/gbp-photos', icon: Image, soon: true },
+    ]
+  },
+  {
+    title: 'FACTURATION',
+    items: [
+      { label: 'Crédits', to: '/credits', icon: Zap },
+      { label: 'Plans & Tarifs', to: '/pricing', icon: CreditCard },
     ]
   },
 ]
@@ -229,19 +236,25 @@ export default function Sidebar({ user }) {
       {/* Bas de sidebar */}
       <div className="px-3 py-4 border-t border-border space-y-3">
         {/* Crédits */}
-        <div className="px-3">
+        <NavLink to="/credits" className="block px-3 group">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-text-secondary">Crédits</span>
-            <span className="text-xs font-medium text-text-primary">{credits ?? 0}</span>
+            <span className="text-xs text-text-secondary group-hover:text-accent transition-colors">Crédits</span>
+            <span className="text-xs font-medium text-text-primary flex items-center gap-1">
+              {credits ?? 0}
+              <Zap size={10} className="text-accent" />
+            </span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-accent rounded-full" style={{ width: `${Math.min((credits / 500) * 100, 100)}%` }} />
           </div>
-        </div>
+        </NavLink>
         {/* Bouton Upgrade */}
-        <button className="w-full bg-accent text-white text-sm font-medium py-2 rounded-lg hover:bg-violet-700 transition-colors">
+        <NavLink
+          to="/pricing"
+          className="block w-full bg-accent text-white text-sm font-medium py-2 rounded-lg hover:bg-violet-700 transition-colors text-center"
+        >
           Upgrade
-        </button>
+        </NavLink>
         {/* Compte utilisateur */}
         <AccountMenu user={user} />
       </div>

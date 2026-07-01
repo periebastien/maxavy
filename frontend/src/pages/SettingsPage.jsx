@@ -271,7 +271,7 @@ export default function SettingsPage() {
                 disabled={googleLoading}
                 onClick={handleGoogleConnect}
               >
-                {googleLoading ? 'Redirection…' : 'Connecter Google'}
+                {googleLoading ? 'Redirection…' : 'Connecter Business Profile'}
               </Button>
             )}
           </div>

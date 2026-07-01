@@ -1,4 +1,5 @@
-import { MapPin, Star, Mail, Zap, AlertCircle, ChevronRight, Globe, Clock, CheckCircle2, Circle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { MapPin, Star, Mail, Zap, AlertCircle, ChevronRight, CheckCircle2, Circle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import MetricCard from '../components/common/MetricCard'
@@ -6,8 +7,9 @@ import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import EntityAvatar from '../components/common/EntityAvatar'
 import { faviconUrl } from '../lib/favicon'
+import api from '../lib/api'
 
-function StepItem({ done, label, description, action, onAction }) {
+function StepItem({ done, label, description, action, onAction, loading }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border last:border-0">
       <div className="shrink-0 mt-0.5">
@@ -23,9 +25,10 @@ function StepItem({ done, label, description, action, onAction }) {
       {!done && action && (
         <button
           onClick={onAction}
-          className="text-xs font-medium text-accent hover:text-violet-700 flex items-center gap-0.5 shrink-0"
+          disabled={loading}
+          className="text-xs font-medium text-accent hover:text-violet-700 flex items-center gap-0.5 shrink-0 disabled:opacity-50"
         >
-          {action} <ChevronRight size={12} />
+          {loading ? 'Connexion…' : <>{action} <ChevronRight size={12} /></>}
         </button>
       )}
     </div>
@@ -49,6 +52,33 @@ export default function DashboardPage() {
   const { locations = [], hasLocations } = useLocations() || {}
   const hasWebsite = !!activeBusiness?.website_url
   const credits    = activeBusiness?.credit_balance ?? 0
+
+  const [hasInvited, setHasInvited]           = useState(false)
+  const [qrVisited, setQrVisited]             = useState(false)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleLoading, setGoogleLoading]     = useState(false)
+
+  useEffect(() => {
+    if (!activeBusiness) return
+    setQrVisited(!!localStorage.getItem(`qr_visited_${activeBusiness.id}`))
+    Promise.all([
+      api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}`),
+      api.get(`/api/v1/google/status?businessId=${activeBusiness.id}`),
+    ]).then(([s, g]) => {
+      setHasInvited((s.invited + s.reviewed) > 0)
+      setGoogleConnected(!!g?.connected)
+    }).catch(() => {})
+  }, [activeBusiness?.id])
+
+  async function connectGoogle() {
+    setGoogleLoading(true)
+    try {
+      const { url } = await api.get(`/api/v1/google/auth-url?businessId=${activeBusiness.id}`)
+      window.location.href = url
+    } catch {
+      setGoogleLoading(false)
+    }
+  }
 
   const COUNTRIES = { FR: 'France', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg', CA: 'Canada', MA: 'Maroc', TN: 'Tunisie', SN: 'Sénégal' }
   const countryLabel = COUNTRIES[activeBusiness?.country] || activeBusiness?.country
@@ -128,14 +158,22 @@ export default function DashboardPage() {
                 onAction={() => navigate('/locations')}
               />
               <StepItem
-                done={false}
+                done={googleConnected}
+                label="Connecter Google Business Profile"
+                description="Indispensable pour récupérer automatiquement vos avis Google."
+                action="Connecter"
+                onAction={connectGoogle}
+                loading={googleLoading}
+              />
+              <StepItem
+                done={hasInvited}
                 label="Envoyer votre première invitation"
                 description="Demandez un avis à un de vos clients."
                 action="Inviter"
-                onAction={() => navigate('/invitations')}
+                onAction={() => navigate('/customers')}
               />
               <StepItem
-                done={false}
+                done={qrVisited}
                 label="Configurer votre QR code"
                 description="Affichez-le en boutique pour collecter des avis."
                 action="Configurer"
@@ -165,7 +203,7 @@ export default function DashboardPage() {
               onClick={() => navigate('/settings')}
               className="mt-4 w-full text-xs font-medium text-accent hover:text-violet-700 flex items-center justify-center gap-1 py-2 border border-accent/30 rounded-lg hover:bg-accent-light transition-colors"
             >
-              Modifier l'établissement <ChevronRight size={12} />
+              Modifier l'entreprise <ChevronRight size={12} />
             </button>
           </div>
 

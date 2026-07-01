@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import { Download, Copy, Check, MapPin } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
@@ -12,6 +12,10 @@ export default function QRCodePage() {
   const { activeBusiness } = useBusiness()
   const { locations = [], activeLocation, setActiveLocation } = useLocations() || {}
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (activeBusiness) localStorage.setItem(`qr_visited_${activeBusiness.id}`, '1')
+  }, [activeBusiness?.id])
 
   const displayRef  = useRef(null) // div wrapping the display QRCodeCanvas
   const downloadRef = useRef(null) // div wrapping the hidden 1024px QRCodeCanvas (no logo — safe for toDataURL)
@@ -91,7 +95,7 @@ export default function QRCodePage() {
               className="w-full h-10 px-3 rounded-xl border border-border text-sm text-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             >
               {locations.map(loc => (
-                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                <option key={loc.id} value={loc.id}>{loc.name}{loc.address ? ` — ${loc.address}` : ''}</option>
               ))}
             </select>
           </div>

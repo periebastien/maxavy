@@ -278,6 +278,7 @@ Champ `campaign_id` et `scheduled_at` ajoutés à la table `invitations`.
 - Récupération automatique des avis Google (cron quotidien)
 - Liste des avis : auteur, note, texte, date, statut répondu/non répondu
 - Filtre par note
+- **Tags d'avis** : l'utilisateur classe ses avis avec des tags libres définis par entreprise (ex. « Coup de cœur », « Service », « Accueil »). Un avis peut porter plusieurs tags (relation N–N). Les tags servent ensuite à peupler sélectivement les widgets (voir Module 8). Tags 100 % manuels au MVP ; règles d'auto-tagging (ex. par note) repoussées en extension.
 - Interface présentée comme une **liste de plateformes** (cards "Google Reviews", avec compteur total/nouveaux/note, bouton "Récupérer les avis"), à l'image de la capture ReputeUp que tu as fournie — mais au MVP, **seule la card Google est fonctionnelle**, les autres plateformes (Facebook, Tripadvisor, et d'autres — voir liste en 7.1) sont visuellement présentes mais désactivées/grisées avec un libellé "Bientôt disponible"
 
 ### 7.1 Important — l'OAuth Google ne couvre QUE Google, les autres plateformes viendront plus tard
@@ -301,11 +302,14 @@ Ta capture montre plusieurs plateformes côte à côte (Google, Tripadvisor, Fac
 ➡️ **Ce qui est déjà prêt à les accueillir, sans rien changer :** la table `reviews` a dès le départ un champ `platform` (voir section 6) — ajouter une plateforme ne demande aucune migration de cette table, juste un nouveau connecteur (nouveau dossier `modules/`) et une nouvelle table de connexion dédiée (sur le modèle de `google_connections`, jamais une fusion a posteriori des mécanismes d'auth qui sont tous différents).
 
 ### MODULE 8 — WIDGETS BASIQUES
-**Routes API :** `/api/widgets/*`
+**Routes API :** `/api/widgets/*`, `/api/tags/*`
 
 - Création d'un widget simple (carrousel d'avis OU badge de note — 1 ou 2 types pour le MVP)
-- Personnalisation couleur
+- Personnalisation : thème clair/sombre, couleur de fond (transparent possible), police (ou celle du site), couleurs des étoiles/bordures/texte/accent — détail complet et catalogue dans `WIDGETS_DESIGN_FR.md`
+- **Filtrage du contenu** : à la création d'un widget, on choisit ce qui le peuple — par **localisation** (optionnel) et/ou par **tag** (optionnel). Les deux filtres se cumulent. Exemple : « carrousel des avis de la *Boutique Lyon* tagués *Coup de cœur* ». Sans filtre, le widget affiche tous les avis de l'entreprise.
+- **Builder** : formulaire organisé en sections repliables (Source des avis, Apparence, Contenu, Comportement) avec **aperçu en direct** (le vrai rendu embarqué, pas une imitation).
 - Code d'intégration (snippet JavaScript à coller sur le site client)
+- Le rendu embarqué est isolé (Shadow DOM, classes préfixées, aucun asset tiers) — voir `WIDGETS_DESIGN_FR.md`.
 
 ### MODULE 9 — SYSTÈME DE CRÉDITS & FACTURATION
 **Routes API :** `/api/credits/*`, `/api/billing/*`
@@ -813,13 +817,22 @@ Vu qu'ils partagent la logique de planification et la même finalité (alimenter
 
 ### Plans MVP
 
-| Plan | Prix | Crédits/mois | Entreprises |
+| Plan | Prix | Crédits/mois | Description |
 |---|---|---|---|
-| **Gratuit** | 0€ | 50 | 1 |
-| **Starter** | 9€/mois | 500 | 3 |
-| **Pro** | 29€/mois | 2000 | Illimité |
+| **Gratuit** | 0€ | 50 | Découvrez l'outil sans engagement |
+| **Starter** | 29€/mois | 200 | Pour les indépendants et TPE |
+| **Pro** | 50€/mois | 500 | Pour les PME multi-établissements |
+| **Agence** | 90€/mois | 2000 | Pour les agences gérant plusieurs clients |
 
-*(Plan Agence avec marque blanche prévu plus tard, une fois le module Whitelabel développé)*
+### Gestion des plans (Super Admin)
+
+Les plans sont stockés en base de données (table `plans`) et **entièrement gérables depuis le panel Super Admin** sans redéploiement :
+- Modifier le nom, la description, le prix, les crédits mensuels
+- Modifier les `stripe_price_id` (mensuel/annuel) et `stripe_product_id`
+- Modifier les fonctionnalités affichées (`features` JSONB — liste de strings)
+- Activer / désactiver un plan (champ `active`)
+
+Cela permet de changer les tarifs ou d'ajouter un plan sans toucher au code. Le panel Super Admin (session 32) contiendra une interface CRUD complète pour les plans.
 
 ---
 

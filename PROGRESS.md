@@ -205,24 +205,68 @@
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
 | 20 | OAuth Google Business Profile | ✅ Terminé | Flow OAuth2 complet (state JWT signé, tokens AES-256-GCM), modèle GoogleConnection, section Settings connect/disconnect. ⚠️ Ajouter `http://localhost:3000/api/v1/google/callback` dans Google Cloud Console → Identifiants → URI de redirection autorisés. |
-| 21 | Sync avis | ⬜ À faire | Cron quotidien, table reviews |
-| 22 | Interface avis | ⬜ À faire | Liste, filtres, réponse |
+| 21 | Sync avis | 🚧 Bloqué | Backend complet (modèle Review, module reviews/, cron quotidien 3h, route /api/v1/reviews). Frontend ReviewsPage avec filtres + pagination. **Bloqué : quota GMB à 0** sur `mybusinessaccountmanagement.googleapis.com` — projet Cloud non vérifié. À débloquer : augmenter le quota ou publier l'app OAuth dans Cloud Console. Migration 19 (`reply_time`) à appliquer quand débloqué. |
+| 22 | Interface avis | 🚧 Bloqué | Dépend de 21. Réponse aux avis (POST GMB API) à implémenter quand quota débloqué. |
 
 ## PHASE 7 — CRÉDITS & STRIPE
 
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
-| 23 | Backend crédits | ⬜ À faire | Table credits, middleware checkCredits |
-| 24 | Stripe abonnements | ⬜ À faire | Plans Gratuit/Starter/Pro, webhooks |
-| 25 | Achat crédits | ⬜ À faire | Packs à la carte, historique facturation |
+| 23 | Backend crédits | ✅ Terminé | Module credits/ (balance, history, add), middleware checkCredits, 50 crédits de bienvenue à la création d'entreprise, page /credits (solde + jauge + historique paginé) |
+| 24 | Stripe abonnements | ✅ Terminé | Module stripe/ (checkout abonnement + webhook), 4 plans en base (Gratuit/Starter 29€/Pro 50€/Agence 90€), page /pricing, stripe_price_id à renseigner depuis Super Admin quand Stripe configuré |
+| 25 | Achat crédits | ✅ Terminé | Checkout packs crédits (50/200/500), webhook payment → crédits, section packs sur page /credits. Sidebar : lien crédits + icône ⚡ + bouton Upgrade → /pricing |
 
 ## PHASE 8 — WIDGETS
 
+> 📐 Design system widgets (catalogue, modèle de config complet, gabarits HTML, anti-fuite) : **`WIDGETS_DESIGN_FR.md`** — à mettre à jour à chaque nouveau widget/option.
+
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
-| 26 | Backend widgets | ⬜ À faire | CRUD, config JSON, embed code |
-| 27 | Widget carrousel | ⬜ À faire | Composant JS embeddable |
-| 28 | Widget badge | ⬜ À faire | Badge note moyenne |
+| 26 | Backend widgets | ✅ Terminé | Migration 21 (location_id), modèle Widget, module widgets/ (CRUD + route publique /public), embed code généré automatiquement, monté dans app.js |
+| 26b | Tags d'avis + filtrage widgets | ✅ Terminé | Migrations 22-24 (tags, review_tags N–N, widgets.tag_id), module tags/ CRUD, tagging des avis (PUT /reviews/:id/tags), getPublic widget filtre business+location+tag et renvoie avis + agrégat note. Voir détail ci-dessous |
+| 27 | Widget carrousel + builder | ✅ Terminé | Backend config-aware (widget.defaults.js + mergeDefaults, getPublic minRating symétrique/tri/limite/id avis/googleUrl/powered-by gratuit, validation update, cache), runtime vanilla (slider/grille/liste + badge, Shadow DOM, classes lcg-), endpoints runtime.js/embed.js/preview, builder frontend (WidgetsPage + WidgetBuilderPage, form piloté par schéma, aperçu live iframe). Vérifié visuellement (5 styles + thème sombre + fallbacks). Voir détail ci-dessous |
+| 28 | Widget badge + embed | 🟡 Largement couvert en 27 | Rendu badge compact/encadré + bootstrap embed.js + copier l'embed déjà livrés. Reste : polish badge (tailles/formes), grep anti-fuite avant commit, « lire plus » carrousel |
+
+### Détail session 27 — Carrousel + builder (2026-07-01)
+
+**Backend** (aucune migration — colonnes `type`/`config`/`location_id`/`tag_id` déjà en place) :
+- `widget.defaults.js` : `mergeDefaults(type, config)` complète + assainit (bornage nombres, validation enums/couleurs, **rejet des clés arbitraires** dans le JSONB). Testé unitairement.
+- `getPublic` refondu via `buildPayload` partagé : `minRating` appliqué **symétriquement** (count + AVG + liste), `sort` (recent/highest/lowest/random), `limit` borné `min(cfg,50)`, expose l'`id` de l'avis (jamais `external_id`/`reply_text`/email), `googleUrl` dérivé de `Location.google_place_id` (null si pas de location), `showPoweredBy` forcé `true` en plan gratuit (sans exposer le plan). Testé bout en bout contre PostgreSQL (avis temporaires + nettoyage).
+- `update` : merge profond sur la config existante puis `mergeDefaults` (validation). `create` : `mergeDefaults`.
+- `widget.runtime.js` : moteur **vanilla** (Function.toString) — rend carrousel (slider/grille/liste) + badge (compact/encadré). Thème clair/sombre/auto, couleurs par élément, police, étoiles SVG inline, dates relatives `Intl.RelativeTimeFormat`, note `Intl.NumberFormat` (virgule FR), fallbacks auteur/texte null. Classes `lcg-`, **zéro asset tiers**. Slider : autoplay, flèches, points, pause survol, `prefers-reduced-motion`, responsive.
+- `widget.controller`/`routes` : `GET /runtime.js` (statique), `GET /:id/embed.js` (bootstrap Shadow DOM), `POST /preview` (auth, config non persistée — isolation via filtre `business_id`), `Cache-Control` sur public/runtime/embed.
+- Réponse `/public` : `{ id, type, style, config, location_id, tag_id, googleUrl, aggregate:{count,average}, reviews:[{id,author_name,rating,text,published_at}] }`.
+
+**Frontend** :
+- `lib/widget-schema.js` : miroir des défauts backend + descripteurs de champs (sections Apparence/Contenu/Comportement) — source de vérité du builder.
+- `WidgetsPage` (`/widgets`) : liste + créer/supprimer. `WidgetBuilderPage` (`/widgets/new`, `/widgets/:id`) : formulaire piloté par le schéma (toggles, color pickers Auto/Transparent, selects, nombres) + **aperçu live** dans une iframe qui charge le **vrai runtime** (source de rendu unique → zéro dérive) via `POST /preview` + `postMessage`. Copier l'embed. Routes dans `App.jsx`.
+
+**Vérifs** : `mergeDefaults` (bornage/rejet) OK, e2e `getPublic` OK (agrégat, minRating symétrique, googleUrl, powered-by), `vite build` OK (1832 modules), **rendu visuel confirmé** (5 styles + thème sombre + accent custom + fallbacks null, 0 erreur console).
+
+**Bug corrigé (2026-07-01)** : le modèle `Review` activait les timestamps Sequelize mais la table `reviews` n'a pas `updated_at` → cassait **toute lecture** d'avis (`/reviews`, dashboard, widgets) et non pas seulement le futur `Review.upsert` du sync. Fix : `updatedAt: false` sur le modèle `Review`.
+
+**Polish builder (2026-07-01)** : les catégories de paramètres (Source des avis, Apparence, Contenu, Comportement) sont des **accordéons** (première ouverte, autres fermées, indépendants) → hauteur réduite. Le chip bordure « Transp. » → **« Aucune »** (le fond garde « Transp. »). Le select de localisation affiche **nom + adresse** (localisations homonymes non confondues). Vérifié visuellement.
+
+**Données de test** : synchro GMB bloquée (quota) → avis factices via `node scripts/test-reviews.js add|clear` (external_id préfixé `seed-`, le `clear` ne touche jamais aux vrais avis). 3 avis de test sur la localisation Marrakech pour l'entreprise Atlasimmobilier.
+
+### Détail session 26b — Tags d'avis + filtrage des widgets (2026-06-30)
+
+**Concept** : couche de classification éditoriale par-dessus les avis. L'entreprise définit ses propres tags ; on tague les avis ; on choisit un tag (et/ou une localisation) pour peupler un widget.
+
+**Décisions actées** : relation **N–N** (un avis = plusieurs tags) ; tags **100 % manuels** au MVP (auto-tagging par note repoussé) ; `tag_id` en **colonne** sur `widgets` (cohérent avec `location_id`, FK `SET NULL`) ; champ **`color`** sur les tags pour les pastilles UI.
+
+**Backend** :
+- Migrations `22` (table `tags` : `business_id`, `name`, `color` + index unique `business_id,name`), `23` (table de liaison `review_tags` : PK composite `review_id`+`tag_id`, FK `CASCADE`), `24` (`widgets.tag_id` FK `SET NULL`).
+- Modèles `Tag.js`, `ReviewTag.js` (junction, `timestamps: false`), `tag_id` ajouté à `Widget.js`.
+- ⚠️ **Aucune association Sequelize** dans ce projet (convention) → la liaison N–N est gérée **manuellement** (requêtes `where` + `Op.in`), pas de `belongsToMany`/`include`.
+- Module `tags/` : CRUD `POST/GET/PATCH/DELETE /api/v1/tags` (isolation `business_id`, conflit nom → 409).
+- Reviews : `PUT /api/v1/reviews/:id/tags` (body `{ tag_ids: [...] }`, remplace l'ensemble ; vérifie que chaque tag appartient au business). `listReviews` enrichit chaque avis d'un tableau `tags`.
+- Widget `getPublic` : filtre `business_id` + `location_id` (si défini) + avis portant le `tag_id` (si défini) ; renvoie `reviews` (50 max, champs publics) + `aggregate { count, average }` (moyenne calculée sur **tout** le jeu filtré, pour le badge).
+- `tag.routes` montées dans `app.js` sur `/api/v1/tags`.
+
+**Frontend** : à venir — UI de tagging sur la page Avis (session 22) + sélecteur de tag dans le builder widget (session 27).
+
+**Vérifs** : migrations 22-24 appliquées, `node --check` OK, backend redémarré, routes testées (tags/reviews protégées → 401, widget public UUID invalide → 404 propre, pas de 500).
 
 ## PHASE 9 — FINITIONS
 
@@ -231,7 +275,7 @@
 | 29 | Paramètres entreprise | ⬜ À faire | Infos générales, notifications, slug |
 | 30 | Gestion équipe | ⬜ À faire | Invitation membres, rôles |
 | 31 | Profil & sécurité | ⬜ À faire | Changement mot de passe, avatar |
-| 32 | Super Admin | ⬜ À faire | Panel global, compte periebastien@gmail.com |
+| 32 | Super Admin | ⬜ À faire | Panel global, compte periebastien@gmail.com. Inclut CRUD plans (nom, description, prix, crédits/mois, features JSONB, stripe_price_id, active) — voir cahier des charges §10 |
 | 33 | Polish UI | ⬜ À faire | Responsive mobile, états vides, loaders |
 
 ## PHASE 10 — DÉPLOIEMENT
@@ -294,6 +338,12 @@ VITE_GOOGLE_CLIENT_ID=...
 16. create-private-feedbacks (retours note ≤ 3 de la page de collecte)
 17. add-email-to-google-connections (`google_account_email` VARCHAR — appliqué via ALTER TABLE direct)
 18. create-invitation-campaigns (table `invitation_campaigns` + colonnes `campaign_id`, `scheduled_at`, `location_id` dans `invitations` — appliqué via ALTER TABLE direct)
+19. add-reply-time-to-reviews (`reviews.reply_time`)
+20. update-plans-add-stripe-fields (`stripe_price_id`, `stripe_price_id_yearly`, `stripe_product_id` sur `plans`)
+21. add-location-to-widgets (`widgets.location_id` FK `SET NULL`)
+22. create-tags (table `tags` : `business_id`, `name`, `color` + index unique `business_id,name`)
+23. create-review-tags (liaison N–N `review_tags`, PK composite `review_id`+`tag_id`, FK `CASCADE`)
+24. add-tag-to-widgets (`widgets.tag_id` FK `SET NULL`)
 
 ### Bugs corrigés — ne pas reproduire
 

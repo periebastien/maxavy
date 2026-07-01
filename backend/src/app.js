@@ -6,6 +6,7 @@ const cors = require('cors')
 const rateLimit = require('express-rate-limit')
 const sequelize = require('./config/database')
 const { startScheduledInvitationsJob } = require('./jobs/scheduled-invitations')
+const { startSyncReviewsJob } = require('./jobs/sync-reviews')
 
 const app = express()
 
@@ -26,6 +27,11 @@ app.use('/api/v1/customers',    require('./modules/customers/customer.routes'))
 app.use('/api/v1/invitations', require('./modules/invitations/invitation.routes'))
 app.use('/api/v1/google',     require('./modules/google/google.routes'))
 app.use('/api/v1/campaigns', require('./modules/campaigns/campaign.routes'))
+app.use('/api/v1/reviews',  require('./modules/reviews/reviews.routes'))
+app.use('/api/v1/credits',  require('./modules/credits/credits.routes'))
+app.use('/api/v1/stripe',   require('./modules/stripe/stripe.routes'))
+app.use('/api/v1/widgets',  require('./modules/widgets/widget.routes'))
+app.use('/api/v1/tags',     require('./modules/tags/tag.routes'))
 
 const PORT = process.env.PORT || 3000
 
@@ -33,6 +39,7 @@ sequelize.authenticate()
   .then(() => {
     console.log('PostgreSQL connecté')
     startScheduledInvitationsJob()
+    startSyncReviewsJob()
     app.listen(PORT, () => console.log(`Backend Locagain sur http://localhost:${PORT}`))
   })
   .catch(err => {
