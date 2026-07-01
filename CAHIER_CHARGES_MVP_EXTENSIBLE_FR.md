@@ -64,6 +64,7 @@ Pour permettre ça, l'architecture technique doit respecter dès le MVP :
 - **React Router** (navigation)
 - **Axios** (appels API)
 - **Context API** ou **Zustand** (state management léger)
+- **Full responsive, mobile-first** — l'admin et les pages publiques s'adaptent de 320px à grand écran (voir charte §8.7)
 
 ### 2.2 Backend
 - **Node.js 18+** + **Express.js**
@@ -235,7 +236,7 @@ Référence : capture de la page "Feedback Page" de ReputeUp fournie par toi. C'
 
 ➡️ **Pourquoi cette répartition ?** Le MVP couvre déjà tout ce qui permet de collecter un avis texte de bout en bout, avec un branding correct et une bonne logique de redirection — l'essentiel pour tes premiers clients. Le reste (vidéo, vocal, parrainage) demande des briques techniques plus lourdes (stockage média, traitement) qui n'ont pas leur place avant que le cœur soit stable, mais l'interface est pensée pour accueillir ces sous-sections supplémentaires sans réorganisation (chaque sous-section est un bloc indépendant, comme chez ReputeUp).
 
-- Responsive mobile (priorité, car scanné via QR code)
+- Responsive mobile (priorité absolue, car scanné via QR code) — full responsive, voir charte §8.7
 - Toutes les sous-sections de réglages suivent le même patron technique : un formulaire qui écrit dans le champ `config` (JSON) de l'entreprise ou dans une table dédiée selon le volume de données — voir section 6 (base de données)
 
 ### MODULE 5 — QR CODE
@@ -688,7 +689,7 @@ Caractéristiques reprises de la capture :
 - **Bas de sidebar : compte utilisateur** (avatar initiales + nom) ouvrant un sous-menu d'actions de compte
 - **Topbar à droite : sélecteur d'entreprise active** (tenant)
 - Items en "bientôt disponible" pour les modules futurs (concurrence en premier)
-- Sidebar fond blanc, ~240px, fixe
+- Sidebar fond blanc, ~240px, fixe sur desktop (`lg+`) ; repliée en drawer + burger sous `lg` — voir 8.7
 
 ### 8.5 Langue
 
@@ -702,6 +703,32 @@ Pour que cette charte soit respectée partout sans copier-coller de styles :
 - **TailwindCSS avec thème personnalisé** (`tailwind.config.js`) : les couleurs ci-dessus deviennent des classes (`bg-accent`, `text-danger`, etc.), pas des codes hexadécimaux répétés dans chaque fichier
 - **Composants React réutilisables** dès le départ pour Bouton, Card, Badge, MetricCard — un seul endroit à modifier si tu changes d'avis sur un style
 - Le site vitrine (futur, non prioritaire) pourra avoir sa propre identité plus proche de l'esprit marketing de Qwairy, complètement indépendante de cette charte d'administration
+
+### 8.7 Responsive & adaptation mobile
+
+L'ensemble de l'interface (admin **et** pages publiques) est **full responsive** et développé en **mobile-first**. L'admin doit être pleinement utilisable au doigt sur smartphone, pas seulement consultable.
+
+**Breakpoints (Tailwind, standards) :**
+
+| Nom | Largeur | Cible |
+|---|---|---|
+| base | < 640px | Mobile portrait |
+| `sm` | ≥ 640px | Mobile paysage |
+| `md` | ≥ 768px | Tablette |
+| `lg` | ≥ 1024px | Desktop (sidebar fixe visible) |
+| `xl` | ≥ 1280px | Grand écran |
+
+**Règles de layout :**
+- **Sidebar** : fixe (~240px) à partir de `lg`. En dessous, elle se replie en **drawer** hors-écran, ouvert par un bouton **burger** ajouté à gauche de la topbar ; fermeture au clic sur un item ou sur l'overlay.
+- **Topbar** : les sélecteurs (entreprise, filtres, thème) se regroupent dans un menu déroulant sous `md` pour ne pas déborder.
+- **Sélecteur de localisation** : déplacé dans le drawer en mobile (il vit en haut de sidebar).
+- **Grilles KPI / cards** : 4 colonnes en `lg` → 2 en `md` → 1 en base.
+- **Tableaux de données** : sous `lg`, chaque ligne devient une **card empilée** (libellé + valeur), plutôt qu'un scroll horizontal. Les colonnes secondaires peuvent être masquées.
+- **Cibles tactiles** : min. **44×44px** pour tout élément cliquable ; espacements suffisants.
+- **Builder de widgets, import CSV, formulaires longs** : restent pleinement fonctionnels en mobile (champs pleine largeur, actions en bas fixées si besoin).
+- **Modales** : plein écran sous `md`.
+
+**Convention de dev :** on écrit le style mobile par défaut, puis on ajoute les variantes `md:` / `lg:`. Jamais l'inverse. Tout nouveau composant est vérifié aux 3 tailles (mobile / tablette / desktop) avant d'être considéré terminé.
 
 ### 8.3 Langue
 

@@ -262,7 +262,7 @@ export default function CollectSettingsPage() {
                 onChange={e => setRating('subtitle', e.target.value)}
                 placeholder="Votre avis nous aide à progresser."
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   label="Message avis positif"
                   value={cfg.rating.thanks_high}

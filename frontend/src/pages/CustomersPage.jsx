@@ -187,7 +187,7 @@ export default function CustomersPage() {
               <button onClick={closePanel} className="text-text-tertiary hover:text-text-primary"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Prénom" value={form.firstname} onChange={e => setForm(f => ({ ...f, firstname: e.target.value }))} />
                 <Input label="Nom"    value={form.lastname}  onChange={e => setForm(f => ({ ...f, lastname:  e.target.value }))} />
               </div>

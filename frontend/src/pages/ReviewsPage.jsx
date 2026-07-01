@@ -159,15 +159,15 @@ export default function ReviewsPage() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="w-56">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="w-full sm:w-56">
             <Select
               value={locationId}
               onChange={e => setLocationId(e.target.value)}
               options={locationOptions}
             />
           </div>
-          <div className="w-44">
+          <div className="w-full sm:w-44">
             <Select
               value={starFilter}
               onChange={e => setStarFilter(e.target.value)}

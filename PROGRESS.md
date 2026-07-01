@@ -1,5 +1,5 @@
 # PROGRESS — Locagain MVP
-> Dernière mise à jour : 2026-06-30 (session 20)
+> Dernière mise à jour : 2026-07-01 (responsive admin)
 > Backend : `node src/app.js` depuis `backend/` → http://localhost:3000
 > Frontend : `npm run dev` depuis `frontend/` → http://localhost:5173
 
@@ -276,7 +276,24 @@
 | 30 | Gestion équipe | ⬜ À faire | Invitation membres, rôles |
 | 31 | Profil & sécurité | ⬜ À faire | Changement mot de passe, avatar |
 | 32 | Super Admin | ⬜ À faire | Panel global, compte periebastien@gmail.com. Inclut CRUD plans (nom, description, prix, crédits/mois, features JSONB, stripe_price_id, active) — voir cahier des charges §10 |
-| 33 | Polish UI | ⬜ À faire | Responsive mobile, états vides, loaders |
+| 33 | Polish UI | 🟡 Partiel | **Responsive full admin ✅** (voir détail ci-dessous). Reste : états vides, loaders |
+
+### Détail — Responsive full admin (2026-07-01)
+
+Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout desktop fixe uniquement). Aligné sur le cahier des charges **§8.7** ajouté le même jour (breakpoints, sidebar drawer, mobile-first).
+
+**Squelette de layout** :
+- `AppLayout` : marge `lg:ml-60` (pleine largeur sous `lg`), overlay mobile qui ferme le drawer, padding `p-4 sm:p-6`, état `sidebarOpen`.
+- `Sidebar` : drawer coulissant hors-écran sous `lg` (`fixed … -translate-x-full lg:translate-x-0`, `z-40`), bouton ✕ (mobile), fermeture auto au clic sur un lien / une localisation / Upgrade (prop `onClose` propagée).
+- `TopBar` : bouton burger (`Menu`, `lg:hidden`), padding `px-4 sm:px-6`, titre `truncate`, nom d'entreprise masqué sous `sm` (avatar seul → libère la place pour les boutons d'action).
+
+**Pages** :
+- `DashboardPage` : KPI `grid-cols-2 lg:grid-cols-4`, grille basse `grid-cols-1 lg:grid-cols-3` (+ `lg:col-span-2`).
+- `ReviewsPage` : filtres empilés `flex-col sm:flex-row`, selects fluides `w-full sm:w-56/44`.
+- Grilles de formulaire 2-col → `grid-cols-1 sm:grid-cols-2` : `CollectSettingsPage`, `InvitationsPage`, `CustomersPage`, `SettingsPage`, `OnboardingPage`.
+- Déjà responsive (rien à changer) : `WidgetBuilderPage` (`lg:grid-cols-[…]`), table `CustomersPage` (`hidden md:table-cell`), `PricingPage`.
+
+**Vérifs** : `vite` compile sans erreur, 0 erreur console, pas de débordement horizontal (pages publiques). Vérif visuelle de l'admin connecté validée par l'utilisateur.
 
 ## PHASE 10 — DÉPLOIEMENT
 

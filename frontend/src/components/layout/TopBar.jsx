@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, Plus, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, Plus, Pencil, Trash2, Menu } from 'lucide-react'
 import { useBusiness } from '../../contexts/BusinessContext'
 import { useClickOutside } from '../../lib/useClickOutside'
 import { faviconUrl } from '../../lib/favicon'
@@ -49,7 +49,7 @@ function BusinessSelector() {
         className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
       >
         <EntityAvatar name={activeBusiness.name} src={faviconUrl(activeBusiness.website_url)} size={28} shape="circle" />
-        <span className="text-sm text-text-primary font-medium max-w-[160px] truncate">{activeBusiness.name}</span>
+        <span className="hidden sm:inline text-sm text-text-primary font-medium max-w-[160px] truncate">{activeBusiness.name}</span>
         <ChevronDown size={14} className={`text-text-tertiary shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -106,13 +106,22 @@ function BusinessSelector() {
   )
 }
 
-export default function TopBar({ title, actions }) {
+export default function TopBar({ title, actions, onMenuClick }) {
   return (
-    <header className="h-14 bg-white border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
-      <h1 className="text-lg font-semibold text-text-primary">{title}</h1>
-      <div className="flex items-center gap-3">
+    <header className="h-14 bg-white border-b border-border flex items-center justify-between gap-2 px-4 sm:px-6 sticky top-0 z-10">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden text-text-secondary hover:text-text-primary shrink-0 -ml-1 p-1"
+          aria-label="Ouvrir le menu"
+        >
+          <Menu size={20} />
+        </button>
+        <h1 className="text-base sm:text-lg font-semibold text-text-primary truncate">{title}</h1>
+      </div>
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {actions}
-        <div className="pl-3 border-l border-border">
+        <div className="pl-2 sm:pl-3 border-l border-border">
           <BusinessSelector />
         </div>
       </div>

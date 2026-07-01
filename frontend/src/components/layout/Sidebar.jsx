@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Eye, MessageSquare, Users, Mail,
-  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard
+  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard, X
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBusiness } from '../../contexts/BusinessContext'
@@ -59,7 +59,7 @@ const sections = [
   },
 ]
 
-function NavItem({ item }) {
+function NavItem({ item, onClose }) {
   const Icon = item.icon
 
   if (item.soon) {
@@ -76,6 +76,7 @@ function NavItem({ item }) {
   return (
     <NavLink
       to={item.to}
+      onClick={onClose}
       className={({ isActive }) =>
         `flex items-center justify-between px-3 py-1.5 rounded-lg text-sm transition-colors ${
           isActive
@@ -97,7 +98,7 @@ function NavItem({ item }) {
 
 /* ── Sélecteur de LOCALISATION active (haut de sidebar) ──
    C'est le périmètre de travail courant (avis, invitations, QR…). */
-function LocationSelector() {
+function LocationSelector({ onClose }) {
   const { locations, activeLocation, setActiveLocation } = useLocations()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -126,7 +127,7 @@ function LocationSelector() {
           {locations.map(loc => (
             <button
               key={loc.id}
-              onClick={() => { setActiveLocation(loc); setOpen(false) }}
+              onClick={() => { setActiveLocation(loc); setOpen(false); onClose?.() }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-bg-page transition-colors border-b border-border last:border-0 ${loc.id === activeLocation?.id ? 'bg-accent-light' : ''}`}
             >
               <EntityAvatar name={loc.name} src={faviconUrl(loc.website_url)} size={28} />
@@ -137,7 +138,7 @@ function LocationSelector() {
             </button>
           ))}
           <button
-            onClick={() => { setOpen(false); navigate('/locations') }}
+            onClick={() => { setOpen(false); onClose?.(); navigate('/locations') }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-bg-page transition-colors text-accent"
           >
             <Plus size={14} className="shrink-0" />
@@ -199,21 +200,26 @@ function AccountMenu({ user }) {
   )
 }
 
-export default function Sidebar({ user }) {
+export default function Sidebar({ user, open = false, onClose }) {
   const { activeBusiness } = useBusiness()
   const { locations = [] } = useLocations() || {}
   const credits = activeBusiness?.credit_balance ?? 0
 
   return (
-    <aside className="w-60 bg-white border-r border-border flex flex-col h-screen fixed left-0 top-0">
-      {/* Logo */}
-      <div className="px-4 py-3 border-b border-border">
+    <aside
+      className={`w-60 bg-white border-r border-border flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+    >
+      {/* Logo + fermeture mobile */}
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <span className="text-lg font-semibold text-accent">Locagain</span>
+        <button onClick={onClose} className="lg:hidden text-text-tertiary hover:text-text-primary" aria-label="Fermer le menu">
+          <X size={18} />
+        </button>
       </div>
 
       {/* Sélecteur de localisation active */}
       <div className="px-0 pt-3">
-        <LocationSelector />
+        <LocationSelector onClose={onClose} />
       </div>
 
       {/* Navigation */}
@@ -226,6 +232,7 @@ export default function Sidebar({ user }) {
                 <NavItem
                   key={item.to}
                   item={item.to === '/locations' ? { ...item, count: locations.length } : item}
+                  onClose={onClose}
                 />
               ))}
             </div>
@@ -236,7 +243,7 @@ export default function Sidebar({ user }) {
       {/* Bas de sidebar */}
       <div className="px-3 py-4 border-t border-border space-y-3">
         {/* Crédits */}
-        <NavLink to="/credits" className="block px-3 group">
+        <NavLink to="/credits" onClick={onClose} className="block px-3 group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-text-secondary group-hover:text-accent transition-colors">Crédits</span>
             <span className="text-xs font-medium text-text-primary flex items-center gap-1">
@@ -251,6 +258,7 @@ export default function Sidebar({ user }) {
         {/* Bouton Upgrade */}
         <NavLink
           to="/pricing"
+          onClick={onClose}
           className="block w-full bg-accent text-white text-sm font-medium py-2 rounded-lg hover:bg-violet-700 transition-colors text-center"
         >
           Upgrade

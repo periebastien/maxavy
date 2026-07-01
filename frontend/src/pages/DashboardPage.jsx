@@ -114,7 +114,7 @@ export default function DashboardPage() {
         )}
 
         {/* Métriques */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             label="Crédits restants"
             value={credits}
@@ -141,10 +141,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Grille basse */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Premiers pas — 2/3 */}
-          <div className="col-span-2 bg-white border border-border rounded-xl p-5">
+          <div className="lg:col-span-2 bg-white border border-border rounded-xl p-5">
             <p className="text-sm font-semibold text-text-primary mb-1">Premiers pas</p>
             <p className="text-xs text-text-secondary mb-4">Complétez ces étapes pour tirer le meilleur de Locagain.</p>
             <div>

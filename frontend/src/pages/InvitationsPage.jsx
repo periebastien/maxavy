@@ -193,7 +193,7 @@ export default function InvitationsPage() {
                 placeholder="Ex : Relance clients juin 2026"
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Canal */}
                 <div>
                   <p className="text-xs font-medium text-text-secondary mb-1.5">Canal</p>

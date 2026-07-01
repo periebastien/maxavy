@@ -166,7 +166,7 @@ export default function SettingsPage() {
               onChange={set('website_url')}
               placeholder="https://www.monsite.com"
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select label="Pays" value={form.country} onChange={set('country')}>
                 {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
               </Select>
