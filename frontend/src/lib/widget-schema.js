@@ -26,7 +26,7 @@ export const WIDGET_TYPES = [
 export const DEFAULT_STYLE = { badge: 'compact', carousel: 'slider' }
 
 const COMMON = {
-  theme: 'light', lang: 'fr', minRating: 0,
+  theme: 'light', lang: 'fr', minRating: 0, containerPadding: 16,
   backgroundColor: 'auto', fontFamily: 'inherit', textColor: 'auto', mutedColor: 'auto',
   starColor: '#FBBC04', borderColor: 'auto', accentColor: '#7C5CFC',
   showGoogleLogo: true, showGoogleLabel: true, googleUrl: '', showPoweredBy: true,
@@ -59,7 +59,8 @@ export const FIELDS = [
   // ---- COMMUN · apparence
   { scope: 'common', key: 'theme', label: 'Thème', type: 'enum', section: 'apparence', options: [['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Auto']] },
   { scope: 'common', key: 'backgroundColor', label: 'Fond', type: 'color', section: 'apparence', allowAuto: true, allowTransparent: true },
-  { scope: 'common', key: 'fontFamily', label: 'Police', type: 'enum', section: 'apparence', options: [['inherit', 'Du site'], ['system', 'Système'], ['inter', 'Inter'], ['roboto', 'Roboto'], ['poppins', 'Poppins'], ['georgia', 'Georgia']] },
+  { scope: 'common', key: 'containerPadding', label: 'Marge intérieure (px)', type: 'number', section: 'apparence', min: 0, max: 64, step: 1 },
+  { scope: 'common', key: 'fontFamily', label: 'Police', type: 'enum', section: 'apparence', note: '« Du site » = police du site où le widget est intégré', options: [['inherit', 'Du site'], ['system', 'Système'], ['inter', 'Inter'], ['roboto', 'Roboto'], ['poppins', 'Poppins'], ['georgia', 'Georgia']] },
   { scope: 'common', key: 'textColor', label: 'Texte', type: 'color', section: 'apparence', allowAuto: true },
   { scope: 'common', key: 'mutedColor', label: 'Texte secondaire', type: 'color', section: 'apparence', allowAuto: true },
   { scope: 'common', key: 'starColor', label: 'Étoiles', type: 'color', section: 'apparence' },

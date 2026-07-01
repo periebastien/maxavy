@@ -107,8 +107,8 @@ function PreviewFrame({ payload }) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
 
   const srcDoc = useMemo(() => (
-    '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}body{padding:18px;background:#f5f4f0}</style></head><body><div id="root"></div>'
-    + '<script src="' + origin + '/api/v1/widgets/runtime.js"></script>'
+    '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}body{padding:18px;background:#f5f4f0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}</style></head><body><div id="root"></div>'
+    + '<script src="' + origin + '/api/v1/widgets/runtime.js?v=' + Date.now() + '"></script>'
     + '<script>window.addEventListener("message",function(e){if(e.data&&e.data.__lcgw&&window.__lcgw){window.__lcgw.render(document.getElementById("root"),e.data.__lcgw)}});parent.postMessage({__lcgwReady:1},"*")</script>'
     + '</body></html>'
   ), [origin])

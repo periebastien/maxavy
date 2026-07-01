@@ -144,13 +144,14 @@ function LOCAGAIN_RUNTIME() {
       var cnt = b.showReviewCount ? '<span class="lcg-sep"></span>' + count + (c.lang === 'en' ? ' reviews' : ' avis') : ''
       inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + cnt + '</strong>'
     }
+    var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
       + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:18px 30px;background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + (b.shape === 'square' ? '6px' : '14px') + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
       + '.lcg-bf-label{font-size:17px;font-weight:500;color:' + pal.text + '}'
       + '.lcg-bf-line{font-size:13px;color:' + pal.muted + '}'
-      + '.lcg-wrap{display:flex;justify-content:' + (b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start') + '}'
+      + '.lcg-wrap{display:flex;justify-content:' + (b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start') + ';padding:' + cpad + 'px}'
     var cls = payload.style === 'framed' ? 'lcg-bf-wrap' : 'lcg-bc'
     var body = payload.style === 'framed'
       ? inner
@@ -203,7 +204,8 @@ function LOCAGAIN_RUNTIME() {
     }
     var content = '<div class="lcg-car">' + header(payload, pal) + body + '</div>'
     var radius = cw.cardRadius + 'px'
-    var css = '.lcg-car{background:' + pal.bg + ';' + (payload.style !== 'list' ? '' : '') + 'border-radius:14px}'
+    var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
+    var css = '.lcg-car{background:' + pal.bg + ';border-radius:14px;padding:' + cpad + 'px}'
       + '.lcg-hd{display:flex;align-items:center;gap:10px;padding:6px 2px 14px}.lcg-hd-avg{font-size:22px;font-weight:500;color:' + pal.text + '}.lcg-hd-cnt{font-size:13px;color:' + pal.muted + ';margin-left:auto}'
       + '.lcg-rc{background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';padding:14px 16px;box-shadow:' + shadow(cw.cardShadow) + '}'
       + '.lcg-rc-head{display:flex;align-items:center;gap:10px}.lcg-rc-id{flex:1;min-width:0}.lcg-rc-name{margin:0;font-size:14px;font-weight:500;color:' + pal.text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lcg-rc-date{margin:0;font-size:12px;color:' + pal.muted + '}'

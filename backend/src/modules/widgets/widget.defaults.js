@@ -2,6 +2,7 @@ const COMMON_DEFAULTS = {
   theme: 'light',
   lang: 'fr',
   minRating: 0,
+  containerPadding: 16,
   backgroundColor: 'auto',
   fontFamily: 'inherit',
   textColor: 'auto',
@@ -72,6 +73,7 @@ const ENUMS = {
 
 const NUM_BOUNDS = {
   minRating: [0, 5],
+  containerPadding: [0, 64],
   avatarsCount: [1, 8],
   cardsDesktop: [1, 6],
   cardsMobile: [1, 3],
