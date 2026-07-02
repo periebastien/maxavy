@@ -317,7 +317,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G5 | Refonte — modèle & config partagée | ✅ Terminé (2026-07-02) | Migration **additive uniquement** (expand, pas de contract) : 4 nouvelles tables + colonnes + migration de données. Voir détail ci-dessous |
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
-| G8 | Frontend — Configuration (wizard) | ⬜ À faire | Section sidebar **anticipée** (2026-07-02, nav uniquement), reste : wizard 4 étapes, édition, premier rapport |
+| G8 | Frontend — Configuration (wizard) | 🚧 En cours | **G8.1 ✅** (2026-07-02) : squelette wizard 4 étapes + **Étape 1 (Grille)** — carte centre déplaçable, carré/cercle, densité/espacement, compteur live, `PUT /config`. Reste **G8.2** (Étapes Mots-clés + Planning) et **G8.3** (Étape Concurrents + récap + premier rapport + édition). Voir détail ci-dessous |
 | G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
@@ -481,7 +481,22 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 
 **Vérifs** : `node --check` sur tous les fichiers touchés/créés OK, smoke-test de chargement des modules OK, migration appliquée (index unique `geogrid_scan_competitors(scan_id, place_id)`), backend redémarré proprement à deux reprises (dont une pour charger le correctif du backfill), page `/positionnement/configuration` identique à l'état pré-G7 en preview. Toutes les données de test (concurrents fictifs, run manuel, scan/points associés) supprimées, config restaurée à l'identique (`grid_size`, `shape`, `run_hour`, `next_run_at` tous vérifiés égaux à leur valeur d'avant session).
 
-**Prochaine session : G8 — Frontend Configuration (wizard)** (le gros morceau frontend : assistant 4 étapes — grille déplaçable + forme, mots-clés, planning, concurrents —, édition pré-remplie, bouton « premier rapport maintenant ». La nav est déjà en place, il reste à construire les pages).
+**G8 découpé en 3 sous-sessions** (validé avec l'utilisateur) : G8.1 (squelette + Étape 1 Grille), G8.2 (Étapes Mots-clés + Planning), G8.3 (Étape Concurrents + récap + premier rapport + édition).
+
+### Détail session G8.1 — Frontend : squelette wizard + Étape 1 Grille (2026-07-02)
+
+Première session **produisant de l'UI visible** de la refonte (G5→G7 étaient 100 % backend). Recon préalable (agent Explore) des patterns réutilisables : stepper d'`OnboardingPage`, `PlaceSearch`, sélecteur de fuseau (`TIMEZONES` + `Select`), chargement Maps de `GeogridMap`.
+
+**Nouveaux fichiers** :
+- `components/common/StepIndicator.jsx` — stepper réutilisable (généralisé depuis le pattern d'OnboardingPage), étapes déjà atteintes cliquables.
+- `components/GeogridConfigMap.jsx` — 2ᵉ carte Google Maps, distincte de `GeogridMap` (heatmap lecture seule) : **marqueur central déplaçable** (`draggable`, callback `dragend` → `onCenterChange`) + points d'aperçu (petits points accent, non cliquables, pas de rang). Recadrage (`fitBounds`) piloté par un `fitToken` qui ne change qu'aux changements de taille/espacement/recentrage — **pas** au glissement (sinon la carte sauterait sous les doigts).
+- `pages/GeogridConfigPage.jsx` — le wizard : `StepIndicator` 4 étapes (Grille/Mots-clés/Planning/Concurrents), gardes (pas de localisation / chargement / plan verrouillé) reprises de `GeogridPage`. **Étape 1 (Grille) complète** : forme carré/cercle (gating `allowed_shapes`), densité (tailles impaires ≤ `max_grid_size`), espacement (presets 250→2000 m), bouton « recentrer sur la fiche », **compteur live** (points · couverture ~km · coût estimé ~$/rapport) branché sur `/grid-preview` (débounce 300 ms). Sauvegarde via `PUT /config` puis passage à l'étape 2. Étapes 2-4 = placeholders indiquant la sous-session à venir.
+
+**Routage** (`App.jsx` + `Sidebar.jsx`) : le wizard prend l'entrée **« Configuration »** (`/positionnement/configuration`) ; l'ancienne `GeogridPage` (mots-clés + heatmap + résultats) est **déplacée sur l'entrée « Suivi »** (`/positionnement/suivi`, dégrisée) — préserve l'accès à tout ce qui marche déjà pendant la construction du wizard, jusqu'à ce que G9 refasse la vraie page Suivi. `/positionnement` redirige vers `/configuration`. `GeogridConfigPage` en `React.lazy`.
+
+**Vérifié en preview réel** (compte de test, Atlasimmobilier) : page chargée sans erreur console, `GET /quota` + `GET /config` + `GET /grid-preview` → 200. **Compteur exact** : 7×7 carré → 49 points / ~3 km / ~0,06 $ ; bascule cercle → **29 points** / ~0,03 $ (masque disque, recalcul débounced correct) ; retour carré → 49. **`PUT /config` → 200**, passage à l'étape 2, config vérifiée en base (carré 7×7 500, `center` null = suit la fiche car marqueur non déplacé, `next_run_at` intact). Navigation étape 2 → placeholder → retour étape 1 OK. (Carte non capturable en screenshot headless — limitation Maps documentée depuis G4 ; rendu OK en vrai navigateur.) Aucune donnée de démo modifiée.
+
+**Prochaine session : G8.2** — Étape 2 (Mots-clés : reprise de l'UI d'ajout/suppression + quota, déjà éprouvée) + Étape 3 (Planning : fréquence bridée par plan, heure/jour, fuseau via le sélecteur existant).
 
 ---
 

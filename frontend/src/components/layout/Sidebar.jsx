@@ -47,7 +47,7 @@ const sections = [
     title: 'POSITIONNEMENT',
     items: [
       { label: 'Configuration', to: '/positionnement/configuration', icon: Settings2 },
-      { label: 'Suivi', to: '/positionnement/suivi', icon: LineChart, soon: true },
+      { label: 'Suivi', to: '/positionnement/suivi', icon: LineChart },
       { label: 'Concurrents', to: '/positionnement/concurrents', icon: Swords, soon: true },
     ]
   },
