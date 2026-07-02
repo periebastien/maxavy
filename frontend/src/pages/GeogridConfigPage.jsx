@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   MapPin, Loader2, Lock, LayoutGrid, Search, CalendarClock, Swords, Square, Circle, RotateCcw,
-  Trash2, Plus, Clock, Globe,
+  Trash2, Plus, Clock, Globe, CheckCircle2, ArrowRight,
 } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import StepIndicator from '../components/common/StepIndicator'
 import GeogridConfigMap from '../components/GeogridConfigMap'
 import Button from '../components/common/Button'
 import Select from '../components/common/Select'
+import PlaceSearch from '../components/common/PlaceSearch'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
@@ -97,6 +98,17 @@ export default function GeogridConfigPage() {
   const [nextRunAt, setNextRunAt] = useState(null)
   const [savingPlanning, setSavingPlanning] = useState(false)
 
+  // Étape 4 — concurrents
+  const [configId, setConfigId] = useState(null)
+  const [competitors, setCompetitors] = useState([])
+  const [detectedList, setDetectedList] = useState([])
+  const [loadingDetected, setLoadingDetected] = useState(false)
+  const [detectedLoaded, setDetectedLoaded] = useState(false)
+
+  // Étape 5 — récap
+  const [runLaunched, setRunLaunched] = useState(null)
+  const [launchingReport, setLaunchingReport] = useState(false)
+
   const bid = activeBusiness?.id
   const locId = activeLocation?.id
   const fiche = activeLocation && activeLocation.lat != null && activeLocation.lng != null
@@ -113,7 +125,7 @@ export default function GeogridConfigPage() {
       api.get(`/api/v1/rank-tracking/config?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/keywords?business_id=${bid}&location_id=${locId}`),
     ])
-      .then(([q, cfg, kws]) => {
+      .then(async ([q, cfg, kws]) => {
         if (cancelled) return
         setQuota(q)
         setKeywords(kws)
@@ -132,12 +144,34 @@ export default function GeogridConfigPage() {
           setRunDayOfMonth(Number.isInteger(cfg.run_day_of_month) ? cfg.run_day_of_month : 1)
           setTimezone(cfg.timezone || activeBusiness?.timezone || 'Europe/Paris')
           setNextRunAt(cfg.next_run_at || null)
+
+          setConfigId(cfg.id)
+          const comps = await api.get(`/api/v1/rank-tracking/competitors?business_id=${bid}&config_id=${cfg.id}`)
+          if (cancelled) return
+          setCompetitors(comps)
+
+          // Localisation déjà configurée (≥1 mot-clé) : on saute directement au récap, avec accès libre
+          // à toutes les étapes pour modifier — plus naturel qu'un retour au wizard linéaire à chaque fois.
+          if (kws.length > 0) setStep(5)
         }
       })
       .catch(e => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [bid, locId])
+
+  // Concurrents détectés (chargement paresseux, seulement à la visite de l'étape 4 — requête plus lourde,
+  // pas nécessaire tant que l'utilisateur ne l'a pas ouverte).
+  useEffect(() => {
+    if (step !== 4 || !configId || detectedLoaded) return
+    let cancelled = false
+    setLoadingDetected(true)
+    api.get(`/api/v1/rank-tracking/competitors/detected?business_id=${bid}&config_id=${configId}`)
+      .then(list => { if (!cancelled) { setDetectedList(list); setDetectedLoaded(true) } })
+      .catch(e => { if (!cancelled) setError(e.message) })
+      .finally(() => { if (!cancelled) setLoadingDetected(false) })
+    return () => { cancelled = true }
+  }, [step, configId, bid, detectedLoaded])
 
   // Aperçu de la grille (débounce) à chaque changement de forme/taille/espacement/centre
   useEffect(() => {
@@ -233,6 +267,39 @@ export default function GeogridConfigPage() {
     }
   }
 
+  async function addCompetitor(place_id, name) {
+    setError('')
+    try {
+      const created = await api.post(`/api/v1/rank-tracking/competitors?business_id=${bid}`, { config_id: configId, place_id, name })
+      setCompetitors(c => [...c, created])
+      setDetectedList(d => d.filter(x => x.place_id !== place_id))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function removeCompetitor(id) {
+    setError('')
+    try {
+      await api.delete(`/api/v1/rank-tracking/competitors/${id}?business_id=${bid}`)
+      setCompetitors(c => c.filter(x => x.id !== id))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function launchFirstReport() {
+    setLaunchingReport(true); setError('')
+    try {
+      const run = await api.post(`/api/v1/rank-tracking/runs?business_id=${bid}`, { location_id: locId })
+      setRunLaunched(run)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLaunchingReport(false)
+    }
+  }
+
   // ── États de garde ──
   if (!activeBusiness || !activeLocation) {
     return (
@@ -275,6 +342,7 @@ export default function GeogridConfigPage() {
   const sizeOptions = gridSizeOptions(quota?.max_grid_size || 7)
   const allowedFrequencies = quota?.allowed_frequencies || ['weekly']
   const atMaxKeywords = quota?.max_keywords != null && keywords.length >= quota.max_keywords
+  const atMaxCompetitors = quota?.max_competitors != null && competitors.length >= quota.max_competitors
   const previewPoints = preview?.points || []
   const pointCount = previewPoints.length
   // Rayon du disque réel = distance du point le plus éloigné du centre. Sert au contour de cercle
@@ -494,9 +562,107 @@ export default function GeogridConfigPage() {
           </div>
         )}
 
-        {/* ── Étape 4 — construite en G8.3 ── */}
+        {/* ── Étape 4 — Concurrents (optionnelle) ── */}
         {step === 4 && (
-          <StepPlaceholder onBack={() => setStep(3)} />
+          <div className="max-w-2xl space-y-4">
+            <div className="bg-white border border-border rounded-2xl p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5">Ajouter un concurrent</label>
+                <PlaceSearch
+                  key={competitors.length}
+                  onSelect={place => addCompetitor(place.place_id, place.name)}
+                  country={activeBusiness?.country}
+                  placeholder="Rechercher une fiche Google (nom du concurrent)"
+                />
+                {atMaxCompetitors && <p className="text-xs text-text-tertiary mt-1">Limite de votre plan atteinte.</p>}
+              </div>
+
+              {competitors.length > 0 && (
+                <ul className="divide-y divide-border">
+                  {competitors.map(c => (
+                    <li key={c.id} className="flex items-center justify-between py-2.5">
+                      <span className="text-sm text-text-primary">{c.name || c.place_id}</span>
+                      <button onClick={() => removeCompetitor(c.id)}
+                        className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg text-text-tertiary hover:text-danger hover:bg-red-50 transition-colors"
+                        title="Retirer ce concurrent">
+                        <Trash2 size={15} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {quota?.max_competitors != null && (
+                <p className="text-xs text-text-tertiary">{competitors.length} / {quota.max_competitors} concurrents suivis</p>
+              )}
+
+              {loadingDetected ? (
+                <div className="flex items-center gap-2 text-xs text-text-tertiary pt-2 border-t border-border">
+                  <Loader2 size={13} className="animate-spin" /> Recherche des concurrents déjà repérés dans vos scans…
+                </div>
+              ) : detectedList.length > 0 && (
+                <div className="pt-3 border-t border-border">
+                  <p className="text-xs font-medium text-text-secondary mb-2">Concurrents repérés dans vos scans</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detectedList.map(d => (
+                      <button key={d.place_id} onClick={() => addCompetitor(d.place_id, d.name)} disabled={atMaxCompetitors}
+                        className="inline-flex items-center gap-1.5 text-xs px-2.5 h-7 rounded-full border border-border hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <Plus size={12} /> {d.name || d.place_id}
+                        {d.best_rank != null && <span className="text-text-tertiary">#{d.best_rank}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-1">
+              <button onClick={() => setStep(3)} className="text-sm text-text-secondary hover:text-accent transition-colors">← Retour</button>
+              <Button onClick={() => setStep(5)}>{competitors.length ? 'Continuer' : 'Passer cette étape'}</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Étape 5 — Récap & lancement ── */}
+        {step === 5 && (
+          <div className="max-w-2xl space-y-4">
+            <div className="bg-white border border-border rounded-2xl divide-y divide-border">
+              <RecapRow label="Grille" onEdit={() => setStep(1)}
+                value={`${shape === 'circle' ? 'Cercle' : 'Carré'} ${gridSize}×${gridSize} · ${spacing < 1000 ? `${spacing} m` : `${fmtNum(spacing / 1000)} km`} · ${pointCount} points`} />
+              <RecapRow label="Mots-clés" onEdit={() => setStep(2)}
+                value={keywords.length ? keywords.map(k => k.keyword).join(', ') : 'Aucun'} />
+              <RecapRow label="Planning" onEdit={() => setStep(3)}
+                value={`${FREQUENCY_LABELS[frequency]} · ${String(runHour).padStart(2, '0')}:00 · ${timezone}`} />
+              <RecapRow label="Concurrents" onEdit={() => setStep(4)}
+                value={competitors.length ? competitors.map(c => c.name || c.place_id).join(', ') : 'Aucun'} />
+            </div>
+
+            {nextRunAt && (
+              <p className="text-xs text-text-secondary flex items-center gap-1.5 px-1">
+                <Globe size={13} /> Prochain rapport automatique planifié le {fmtDateTime(nextRunAt)}
+              </p>
+            )}
+
+            {runLaunched ? (
+              <div className="bg-accent-light rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm text-accent flex items-center gap-2">
+                  <CheckCircle2 size={16} /> Rapport lancé — {runLaunched.keywords_total} mot{runLaunched.keywords_total > 1 ? 's' : ''}-clé{runLaunched.keywords_total > 1 ? 's' : ''} en cours de scan.
+                </span>
+                <button onClick={() => navigate('/positionnement/suivi')}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+                  Voir les résultats <ArrowRight size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center pt-1">
+                <button onClick={() => setStep(4)} className="text-sm text-text-secondary hover:text-accent transition-colors">← Retour</button>
+                <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length}>
+                  {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
+                  Lancer un premier rapport maintenant
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </AppLayout>
@@ -513,15 +679,14 @@ function ShapeButton({ active, onClick, icon, label }) {
   )
 }
 
-function StepPlaceholder({ onBack }) {
+function RecapRow({ label, value, onEdit }) {
   return (
-    <div className="text-center bg-white border border-dashed border-border rounded-2xl p-12">
-      <h3 className="text-sm font-semibold text-text-primary">Étape « Concurrents »</h3>
-      <p className="text-sm text-text-secondary mt-1.5 max-w-sm mx-auto">
-        Cette étape sera construite dans la session G8.3, avec le récap final et le premier rapport.
-        Les Étapes 1 à 3 sont déjà opérationnelles et enregistrent bien la configuration.
-      </p>
-      <button onClick={onBack} className="mt-5 text-sm text-accent hover:underline">← Revenir à l'étape précédente</button>
+    <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-text-secondary">{label}</p>
+        <p className="text-sm text-text-primary truncate">{value}</p>
+      </div>
+      <button onClick={onEdit} className="shrink-0 text-xs font-medium text-accent hover:underline">Modifier</button>
     </div>
   )
 }

@@ -17,6 +17,7 @@ router.get('/competitors',             ctrl.listCompetitors)
 router.post('/competitors',            ctrl.createCompetitor)
 router.delete('/competitors/:id',      ctrl.removeCompetitor)
 router.post('/competitors/recompute',  ctrl.recomputeCompetitors)
+router.get('/competitors/detected',    ctrl.detectedCompetitors)
 
 router.post('/scans',            ctrl.createScan)
 router.get('/scans',             ctrl.listScans)

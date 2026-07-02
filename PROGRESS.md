@@ -317,7 +317,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G5 | Refonte — modèle & config partagée | ✅ Terminé (2026-07-02) | Migration **additive uniquement** (expand, pas de contract) : 4 nouvelles tables + colonnes + migration de données. Voir détail ci-dessous |
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
-| G8 | Frontend — Configuration (wizard) | 🚧 En cours | **G8.1 ✅** (2026-07-02) : squelette wizard + **Étape 1 (Grille)**. **G8.2 ✅** (2026-07-02) : **Étape 2 (Mots-clés)** + **Étape 3 (Planning)**. Reste **G8.3** (Étape Concurrents + récap + premier rapport + édition). Voir détail ci-dessous |
+| G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
 | G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
@@ -512,7 +512,23 @@ Session **100 % frontend** (aucun endpoint backend nécessaire — tout existait
 
 **Vérif visuelle en attente** : contrairement aux sessions précédentes, le rendu réel dans le navigateur n'a pas été confirmé par capture/clic automatisés cette fois (limitation ci-dessus) — à valider par l'utilisateur directement (HMR Vite déjà actif, pas de redémarrage nécessaire).
 
-**Prochaine session : G8.3** — Étape 4 (Concurrents : recherche par nom via `PlaceSearch` existant + sélection depuis les concurrents détectés — **nécessite un petit ajout backend**, `GET /competitors/detected`, non couvert par G7) + écran récap + bouton « Lancer un premier rapport maintenant » (`POST /runs`) + mode édition (préremplissage complet à la réouverture) + bascule finale de route et retrait de l'ancienne `GeogridPage`.
+**Prochaine session initialement : G8.3.** Faite dans la foulée (2026-07-02) — voir détail ci-dessous. **G8 est maintenant complet.**
+
+### Détail session G8.3 — Frontend : Étape Concurrents + récap + premier rapport + édition (2026-07-02)
+
+**Petit ajout backend** (annoncé en amont) : `competitor.service.js` gagne `detected(businessId, userId, configId)` — parcourt les 20 scans les plus récents de la config, dédoublonne les concurrents vus dans `geogrid_points.competitors` qui ne sont PAS déjà suivis, retourne triés par meilleur rang observé (plafonné à 30). Nouvel endpoint `GET /competitors/detected`. **Testé en direct contre les vraies données de démo** : 30 concurrents détectés (agences immobilières de Marrakech réelles), triés correctement.
+
+**Étape 4 (Concurrents, optionnelle)** : ajout par recherche (`PlaceSearch`, réutilisé tel quel — `key={competitors.length}` pour forcer sa réinitialisation après chaque ajout, sans modifier le composant partagé lui-même puisqu'il est aussi utilisé par Onboarding/Localisations avec un usage différent où garder le nom affiché après sélection est voulu) + liste de puces cliquables pour les concurrents détectés (chargement paresseux, seulement à la visite de l'étape). Bouton « Passer cette étape » si aucun concurrent (décision actée : les concurrents peuvent être ajoutés après un premier rapport).
+
+**Étape 5 (Récap & lancement)** — pas un 5ᵉ point dans le stepper (qui reste à 4 dimensions de config), mais un écran de conclusion : résumé des 4 dimensions avec lien « Modifier » vers l'étape correspondante, affichage du `next_run_at`, bouton **« Lancer un premier rapport maintenant »** → `POST /runs` (déjà construit et testé en G7, pas de nouvelle logique côté cron/scan) → état de succès avec lien vers Suivi.
+
+**Mode édition** : une localisation déjà configurée (≥1 mot-clé au chargement) atterrit directement à l'étape 5 au lieu de l'étape 1 — accès libre à toutes les étapes via le `StepIndicator` existant (dont la logique `step.id <= current` déverrouille déjà tout une fois `current=5`, sans code supplémentaire). Solution volontairement minimale : pas de notion séparée de « mode édition », juste un choix d'étape de démarrage.
+
+**Décision pour la suite (pas cette session)** : l'ancienne `GeogridPage` (résultats/heatmap) reste à `/positionnement/suivi` — son retrait est repoussé à **G9**, qui la remplace par la vraie page Suivi ; la retirer maintenant aurait supprimé tout moyen de voir les résultats avant G9.
+
+**Vérifié** : `esbuild` (bundle à blanc, aucune erreur de syntaxe) + série de tests API authentifiés contre le backend réel — `GET /competitors/detected` (30 résultats réels), cycle complet `POST`/`GET`/`DELETE /competitors` (avec les mêmes champs que le frontend consomme). *Pas* de nouveau test réel de `POST /runs` avec coût DataForSEO : ce chemin est inchangé depuis G7 où il a déjà été prouvé (voir détail G7), seul le branchement frontend est nouveau. Vérification visuelle toujours en attente côté utilisateur (contrainte de session : port 5173 tenu par un terminal externe) — mais entre G8.2 et G8.3, l'utilisateur a lui-même ajouté 4 mots-clés réels via l'Étape 2, confirmant que ce morceau fonctionne bien en conditions réelles.
+
+**Prochaine session : G9 — Frontend Suivi** (vue globale + par mot-clé, tableaux triables fiche+concurrents, courbes Recharts, retrait de l'ancienne `GeogridPage`).
 
 ---
 

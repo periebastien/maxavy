@@ -149,4 +149,43 @@ async function recompute(businessId, userId, configId) {
   return { scans_updated: scans.length }
 }
 
-module.exports = { list, create, remove, recompute, computeAndStoreForScan }
+// Concurrents « repérés » : fiches vues dans les points des scans récents mais PAS ENCORE suivies —
+// alimente l'étape 4 du wizard (« sélection depuis les concurrents détectés », GEOGRID_REFONTE_FR.md §6).
+// Bornée aux 20 scans les plus récents (coût de lecture borné, pas besoin de tout l'historique pour des
+// suggestions). Triée par meilleur rang observé (les concurrents les plus visibles en premier).
+async function detected(businessId, userId, configId) {
+  await ensureAccess(businessId, userId)
+  const config = await ensureConfig(configId, businessId)
+
+  const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id }, attributes: ['id'] })
+  const keywordIds = keywords.map(k => k.id)
+  if (!keywordIds.length) return []
+
+  const scans = await GeogridScan.findAll({
+    where: { keyword_id: { [Op.in]: keywordIds }, status: 'done' },
+    attributes: ['id'], order: [['created_at', 'DESC']], limit: 20,
+  })
+  if (!scans.length) return []
+
+  const tracked = await GeogridCompetitor.findAll({ where: { config_id: config.id }, attributes: ['place_id'] })
+  const trackedIds = new Set(tracked.map(c => c.place_id))
+
+  const points = await GeogridPoint.findAll({
+    where: { scan_id: { [Op.in]: scans.map(s => s.id) } },
+    attributes: ['competitors'],
+  })
+
+  const seen = new Map() // place_id -> { place_id, name, best_rank }
+  for (const pt of points) {
+    for (const c of pt.competitors || []) {
+      if (!c.place_id || trackedIds.has(c.place_id)) continue
+      const existing = seen.get(c.place_id)
+      if (!existing || (c.rank != null && (existing.best_rank == null || c.rank < existing.best_rank))) {
+        seen.set(c.place_id, { place_id: c.place_id, name: c.name, best_rank: c.rank })
+      }
+    }
+  }
+  return [...seen.values()].sort((a, b) => (a.best_rank ?? 999) - (b.best_rank ?? 999)).slice(0, 30)
+}
+
+module.exports = { list, create, remove, recompute, detected, computeAndStoreForScan }
