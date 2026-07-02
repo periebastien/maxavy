@@ -338,7 +338,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
 | G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
-| G9 | Frontend — Suivi | 🚧 En cours | **G9.1 ✅** (2026-07-02) : Vue globale (sélecteur de rapport + tableau + flèches d'évolution). Reste **G9.2** (courbes, agrégation temporelle) et **G9.3** (vue par mot-clé + bascule finale). Voir détail ci-dessous |
+| G9 | Frontend — Suivi | 🚧 En cours | **G9.1 ✅** + **G9.2 ✅** (2026-07-02) : Vue globale complète (tableau + courbe multi-mots-clés, agrégation temporelle). Reste **G9.3** (vue par mot-clé + bascule finale). Voir détail ci-dessous |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
@@ -579,7 +579,24 @@ Nouveau fichier `pages/GeogridSuiviPage.jsx`, câblé sur une **route de dev tem
 
 **Vérifié en direct** (preview réel, compte de démo) : tableau affichant les 5 vrais mots-clés du rapport manuel lancé par l'utilisateur (ATRP 15.27 à 21.00 selon le mot-clé, top 3/10/20 cohérents), date correctement formatée après le correctif, colonne Évolution à « — » pour tous (cohérent : un seul rapport terminé à ce jour, donc pas de précédent à comparer — cette branche du code est bien exercée, la branche "avec delta réel" est une arithmétique triviale non testée en live faute d'un 2ᵉ rapport, mais vérifiée par relecture). Aucune erreur console/réseau.
 
-**Prochaine session : G9.2 — Courbes** (bucketing jour/semaine/mois + sélecteur moyenne/meilleure position, brique réutilisable, câblée sur la courbe multi-mots-clés de cette vue globale).
+**Prochaine session initialement : G9.2.** Faite dans la foulée (2026-07-02) — voir détail ci-dessous.
+
+### Détail session G9.2 — Frontend : Courbes (agrégation temporelle) (2026-07-02)
+
+**`npm install recharts`** (3.9.1). Nouvelle brique réutilisable **`lib/geogrid-trend.js`** (fonctions pures, aucune dépendance de dates ajoutée — arithmétique `Date` native) :
+- `bucketOf`/`bucketize` : regroupe des points `{date, value}` par jour/semaine (lundi-dimanche)/mois, agrège par **moyenne** ou **meilleure position** (`Math.min`, ATRP = rang donc plus bas = mieux — GEOGRID_REFONTE_FR.md §4.2). ⚠️ Clé de bucket construite entièrement en composants **locaux** (`getFullYear`/`getMonth`/`getDate`), jamais via `toISOString()` qui repasse par UTC et peut faire glisser le jour d'un cran selon le fuseau du navigateur — piège identifié et évité dès l'écriture, pas après coup.
+- `filterByRange` : presets 30j/90j/6 mois/12 mois/tout (interprétation du « date de début réglable » du cahier — un sélecteur de plage plutôt qu'un input date brut, plus simple et standard).
+- `mergeSeriesForChart` : fusionne N séries (1 par mot-clé) déjà bucketées en lignes uniques pour Recharts, alignées par clé de bucket (un mot-clé sans donnée sur un bucket reste `null`, Recharts saute juste ce segment).
+
+**Testé en isolation avant intégration** (6 cas, via `node --input-type=module`) : fusion de 2 scans le même jour (moyenne vs meilleure), bucketing semaine avec 2 dates dans la même semaine + 1 dans la suivante (bornes lundi vérifiées), bucketing mois, valeurs `null` ignorées, fusion multi-séries avec buckets partiellement différents, filtre de plage. Tous corrects.
+
+**Intégration dans `GeogridSuiviPage.jsx`** : chargement des mots-clés de la localisation (indépendant du rapport sélectionné dans le tableau — la courbe montre tout l'historique) puis `GET /trend` par mot-clé en parallèle (une fois, pas à chaque changement de rapport). Sélecteurs plage/granularité/mode au-dessus du graphe, axe Y **inversé** (`reversed`, rang 1 en haut = mieux), une ligne par mot-clé (couleurs cycliques), légende, tooltip.
+
+**Vérifié en preview réel** : SVG du graphe présent, **5 lignes** (une par mot-clé, correspond aux 5 mots-clés réels), légende correcte, les 3 sélecteurs changent bien l'état du composant (testé : granularité → « Jour »). Capture d'écran impossible (même limitation que Maps depuis G4 — rendu SVG/canvas bloqué en navigateur headless, aucune erreur console associée, pas un bug de l'appli).
+
+**Incident de session (résolu, sans rapport avec le code livré)** : mes rechargements répétés pendant la vérification ont épuisé le rate-limit global de l'API (100 req/15 min, `app.js`) puis fait perdre le token de connexion (l'appli se déconnecte sur un échec de `/auth/me`). Résolu en redémarrant le backend (rate-limit en mémoire, réinitialisé instantanément) puis en se reconnectant. Aucune conséquence sur le code ou les données.
+
+**Prochaine session : G9.3 — Vue par mot-clé + bascule finale** (extension backend `GET /scans/:id` + agrégats concurrents, heatmap réutilisée, cartes de métriques, tableau triable « ma fiche + concurrents », réutilisation de la courbe ci-dessus, puis bascule de route et retrait de l'ancienne `GeogridPage`).
 
 ---
 
