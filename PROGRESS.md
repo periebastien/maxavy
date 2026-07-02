@@ -315,7 +315,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G3 | Backend — cron & poll | ✅ Terminé | `jobs/scan-geogrid.js` (boucle 90s : timeout + poll + lancement des dus), scalabilité (lot/concurrence/pool bornés), paramètres `.env`. Testé cron réel de bout en bout (scan lancé + terminé en autonomie). Voir détail ci-dessous |
 | G4 | Frontend — heatmap | ✅ Terminé | `GeogridPage` (`/positionnement`, lazy) + `GeogridMap` (carte Google + pastilles rang colorées + InfoWindow concurrents), gestion mots-clés, gating par plan, scan + polling, métriques. Vérifié avec données réelles (structure/metrics/API OK). Voir détail ci-dessous |
 | G5 | Refonte — modèle & config partagée | ✅ Terminé (2026-07-02) | Migration **additive uniquement** (expand, pas de contract) : 4 nouvelles tables + colonnes + migration de données. Voir détail ci-dessous |
-| G6 | Backend — planning & grille cercle | ⬜ À faire | Forme cercle (masque disque), `next_run_at` + enum `monthly`, cutover cron par runs, `/grid-preview` étendu — cf. `GEOGRID_REFONTE_FR.md` §16 (G5+G6 à livrer comme un cutover cohérent) |
+| G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ⬜ À faire | Agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints runs/trend/config |
 | G8 | Frontend — Configuration (wizard) | ⬜ À faire | Section sidebar, wizard 4 étapes, édition, premier rapport |
 | G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
@@ -424,7 +424,35 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 
 **Non-régression vérifiée en preview réel** (backend redémarré, compte de test, business Atlasimmobilier) : `/positionnement` inchangée — mot-clé, quota 1/5, 4 `MetricCard` (ARP 14.63, ATRP 19.96, SoLV 2 %, note 4.6/25 avis), grille 7×7 · 8/49 points classés. Tous les appels API `rank-tracking` (`/quota`, `/keywords`, `/scans`, `/scans/:id`) → 200 OK. Aucune erreur console/réseau. (Écran de la carte non capturable en navigateur headless — limitation documentée depuis G4, pas un bug.)
 
-**Prochaine session : G6 — backend planning & grille cercle** (masque disque, `next_run_at` + enum `monthly`, cutover cron par runs, `/grid-preview` étendu — cf. `GEOGRID_REFONTE_FR.md` §16 pour le détail technique du cutover).
+**Prochaine session initialement : G6 — backend planning & grille cercle.** Faite dans la foulée (2026-07-02) — voir détail ci-dessous.
+
+### Détail session G6 — Backend planning & grille cercle (2026-07-02)
+
+**Cutover complet** (la moitié « contract » de l'expand-contract commencé en G5) : grille et planning quittent définitivement le mot-clé, le cron bascule sur `next_run_at`/runs. Livré en un seul commit cohérent, comme prévu (§16).
+
+**Grille cercle** (`geogrid.utils.js`) : `buildGrid()` accepte un 5ᵉ paramètre `shape` (`'square'` défaut, `'circle'`). Cercle = masque disque sur la même grille carrée (prédicat `row²+col² ≤ half²`, `half=(N-1)/2`) — aucune refonte du modèle géométrique (row/col/quadrant inchangés). Prédicat vérifié par le calcul avant écriture (7×7→29, 9×9→49, 5×5→13 points, correspond exactement au tableau du cahier) puis **revérifié en direct via `/grid-preview?shape=circle`** : 49 (carré) vs 29 (cercle) sur la même grille 7×7.
+
+**Planning fuseau-aware** (nouveau fichier `schedule.utils.js`, dépendance **Luxon** ajoutée) : `computeNextRunAt(config, timezone, fromDate)` calcule la prochaine occurrence (quotidien/hebdo/mensuel, heure + jour + fuseau, clamp fin de mois pour le 29/30/31). Toujours appelée avec l'**ancre** du planning (le `next_run_at` courant), jamais `now`, pour ne jamais dériver si un tick est en retard. **Testé en isolation avant intégration** : 7 cas (quotidien avant/après l'heure, hebdo avec rollover semaine suivante, jour cible = aujourd'hui mais heure passée, mensuel avec clamp 31→30 en avril, mensuel avec rollover mois suivant), fuseaux Europe/Paris et Africa/Casablanca — tous corrects, vérifiés à la main.
+
+**Auto-provisioning des configs** (`rank-tracking.service.js`) : `ensureConfigForLocation(location, business)` — récupère la config existante d'une localisation ou en crée une avec des défauts sûrs (plafonnés par les nouvelles clés de quota `max_grid_size`/`allowed_frequencies`, repli sur les anciennes clés). Appelée à la création d'un mot-clé (remplace l'ancienne gestion `grid_size`/`grid_spacing_m`/`frequency` au niveau mot-clé, qui disparaît de `create()`/`update()`) et défensivement dans `scan.service.js` (`loadConfigForKeyword`) pour tout mot-clé sans `config_id` (auto-guérison). **Testé en direct** : création d'un 2ᵉ mot-clé sur la même localisation → réutilise la config existante (pas de doublon, vérifié en base).
+
+**Cron réécrit par runs** (`scan.service.js`, `jobs/scan-geogrid.js`) : `findDueConfigs` (remplace `findDueKeywords`, filtre sur `geogrid_configs.next_run_at`, NULL traité comme dû — filet de sécurité), `launchRunForConfig` (avance `next_run_at` **avant** tout scan — même principe anti-boucle que `last_scanned_at` en G3 — crée un `geogrid_run`, scanne tous les mots-clés actifs de la config via `Promise.allSettled`, un échec de lancement individuel ne bloque pas les autres), `runDueConfigs` (paquets par `concurrency`, ignore les configs downgradées), `closeFinishedRuns` (clôture les runs dont tous les scans sont terminaux ; `has_failures` se déclenche aussi si moins de scans que de mots-clés visés existent — auto-guérison en cas de crash pendant le lancement). Ordre du tick : `failStuckScans` → `refreshRunningScans` → `closeFinishedRuns` → `runDueConfigs`.
+
+**`submitScanForKeyword`** : source désormais la grille (taille/espacement/forme/centre) depuis la **config** du mot-clé (plus ses propres champs, supprimés) ; accepte un `runId` optionnel (présent pour un run planifié, absent pour un scan manuel ad-hoc — **`POST /scans` reste inchangé et fonctionnel**, le bouton « Scanner maintenant » actuel n'a pas besoin d'être touché avant G8).
+
+**Migration finale (contract)** — 2 migrations :
+- 40 : retrait de `grid_size`/`grid_spacing_m`/`frequency`/`last_scanned_at` de `geogrid_keywords` (+ nettoyage du type ENUM Postgres orphelin). Sûr : G5 avait déjà recopié ces valeurs dans `geogrid_configs`, et le frontend actuel ne lit/écrit jamais ces champs au niveau mot-clé (vérifié dans l'exploration G5).
+- 41 : calcule et pose `next_run_at` sur les configs existantes créées par G5 (qui n'en avaient pas) — **evite qu'au premier tick après déploiement, le cron ne lance un scan réel surprise** (facturé chez DataForSEO) sur la démo. Résultat vérifié : config Atlasimmobilier → `next_run_at` = lundi 6 juillet 03:00 UTC (04:00 Casablanca), calcul manuel confirmé exact.
+
+**Tests réels effectués** (contre la vraie base + un vrai appel DataForSEO, données nettoyées après coup) :
+1. Ajout d'un mot-clé de test → `POST /keywords` 201, config réutilisée (pas de doublon), puis `DELETE` → 204. Testé en preview navigateur.
+2. **Cycle complet run réel** : config temporairement réduite à une grille 3×3 (coût minimal, ~0,011 $), `runDueConfigs` forcé → run créé (`status:running`, `keywords_total:1`), scan créé avec `run_id` et `points_total:9` (confirme la grille sourcée depuis la config), `refreshRunningScans` fait progresser les points (0→4/9 en 80s — le scan n'a pas eu le temps de finir dans la fenêtre du test, sans rapport avec le code). Config restaurée à l'identique (grille 7×7, `next_run_at` original) après coup.
+3. **`closeFinishedRuns` en isolation** (4 scénarios synthétiques, rapides et gratuits) : tous scans done → run done ; un scan failed → run done + `has_failures:true` ; un scan encore running → run **non clôturé** (vérifie qu'on n'anticipe pas) ; moins de scans que de mots-clés visés → `has_failures:true` (détection d'échec de lancement). Les 4 passent exactement comme attendu.
+4. Bonus involontaire : un run orphelin issu d'un bug de script de test (0 scan associé, `status:running`) a été correctement détecté et clôturé par `closeFinishedRuns` avec `has_failures:true` lors d'une exécution ultérieure — confirmation en conditions réelles du comportement auto-réparateur documenté en §16.
+
+**Vérifs** : `node --check` sur les 8 fichiers touchés/créés OK, smoke-test de chargement des modules OK, 2 migrations appliquées, backend redémarré proprement (un seul listener, aucune erreur), page `/positionnement` identique à l'état pré-G6 en preview (mot-clé, quota, métriques, grille). Données de test entièrement nettoyées, config restaurée à l'identique.
+
+**Prochaine session : G7 — backend concurrents & agrégats** (liste de concurrents, agrégats fiche+concurrents par scan — top 3/10/20 —, `MAX_COMPETITORS` 5→20, endpoints `runs`/`trend`/`config`).
 
 ---
 

@@ -3,17 +3,19 @@ const { v4: uuidv4 } = require('uuid')
 const GeogridScan = require('../../models/GeogridScan')
 const GeogridPoint = require('../../models/GeogridPoint')
 const GeogridKeyword = require('../../models/GeogridKeyword')
+const GeogridConfig = require('../../models/GeogridConfig')
+const GeogridRun = require('../../models/GeogridRun')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const { buildGrid } = require('./geogrid.utils')
+const { computeNextRunAt } = require('./schedule.utils')
 const provider = require('./providers')
-const { ensureAccess, getQuota } = require('./rank-tracking.service')
+const { ensureAccess, getQuota, ensureConfigForLocation } = require('./rank-tracking.service')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const RANK_PROVIDER_NAME = process.env.RANK_PROVIDER || 'dataforseo'
 const NOT_RANKED = 21 // valeur conventionnelle pour ATRP quand la fiche est absente du Top 20
 const MAX_COMPETITORS = 5
-const DAY_MS = 24 * 60 * 60 * 1000
 
 function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length }
 function round2(n) { return Math.round(n * 100) / 100 }
@@ -26,28 +28,44 @@ async function loadKeyword(keywordId, businessId) {
   return keyword
 }
 
+// La grille (taille/espacement/forme) vit désormais sur la config partagée de la localisation, plus sur
+// le mot-clé (refonte G5/G6). Auto-provisioning défensif : un mot-clé sans config_id (créé avant le
+// cutover, ou orphelin après une config supprimée) se voit rattacher/créer une config à la volée.
+async function loadConfigForKeyword(keyword) {
+  let config = keyword.config_id ? await GeogridConfig.findByPk(keyword.config_id) : null
+  if (!config) {
+    const location = await Location.findByPk(keyword.location_id)
+    const business = await Business.findByPk(keyword.business_id)
+    config = await ensureConfigForLocation(location, business)
+    await keyword.update({ config_id: config.id })
+  }
+  return config
+}
+
 // Cœur de création d'un scan, sans contrôle d'accès/quota (assuré par l'appelant) — partagé entre
-// l'endpoint manuel (createScan) et le cron (runDueScans). Marque last_scanned_at EN PREMIER pour
-// qu'un échec (grille invalide, fournisseur KO) ne relance pas le mot-clé à chaque tick.
-async function submitScanForKeyword(keyword) {
+// l'endpoint manuel (createScan, ad-hoc, runId absent) et le lancement d'un rapport planifié
+// (launchRunForConfig, runId présent). Grille/centre viennent de la config du mot-clé, pas du mot-clé
+// lui-même (cutover G6 — voir GEOGRID_REFONTE_FR.md §16).
+async function submitScanForKeyword(keyword, { runId } = {}) {
   const businessId = keyword.business_id
-  await keyword.update({ last_scanned_at: new Date() })
+  const config = await loadConfigForKeyword(keyword)
 
   const location = await Location.findOne({ where: { id: keyword.location_id, business_id: businessId } })
   if (!location) throw { status: 404, message: 'Localisation introuvable' }
 
-  const centerLat = Number(location.lat)
-  const centerLng = Number(location.lng)
-  const gridPoints = buildGrid(centerLat, centerLng, keyword.grid_size, keyword.grid_spacing_m)
+  const centerLat = config.center_lat != null ? Number(config.center_lat) : Number(location.lat)
+  const centerLng = config.center_lng != null ? Number(config.center_lng) : Number(location.lng)
+  const gridPoints = buildGrid(centerLat, centerLng, config.grid_size, config.grid_spacing_m, config.shape)
   const pointSpecs = gridPoints.map(p => ({ id: uuidv4(), ...p }))
 
   const scan = await GeogridScan.create({
     business_id: businessId,
     location_id: location.id,
     keyword_id: keyword.id,
+    run_id: runId || null,
     keyword: keyword.keyword,
-    grid_size: keyword.grid_size,
-    grid_spacing_m: keyword.grid_spacing_m,
+    grid_size: config.grid_size,
+    grid_spacing_m: config.grid_spacing_m,
     center_lat: centerLat,
     center_lng: centerLng,
     status: 'pending',
@@ -197,53 +215,103 @@ async function getScan(scanId, businessId, userId) {
   return { scan, points }
 }
 
-// ============ Fonctions cron (G3) — sans contexte utilisateur, appelées par jobs/scan-geogrid.js ============
+// ============ Fonctions cron (G3, refondues en G6) — sans contexte utilisateur, jobs/scan-geogrid.js ============
+// La planification est désormais portée par la config (next_run_at), pas par mot-clé — un "rapport"
+// (geogrid_run) scanne TOUS les mots-clés actifs de la config en une fois. Voir GEOGRID_REFONTE_FR.md §7/§16.
 
-// Mots-clés actifs « dus » : jamais scannés, ou dernier scan plus vieux que leur fenêtre de fréquence.
-// Les jamais-scannés (last_scanned_at NULL) passent en premier.
-async function findDueKeywords(limit) {
-  const now = Date.now()
-  const weeklyCutoff = new Date(now - 7 * DAY_MS)
-  const dailyCutoff = new Date(now - DAY_MS)
-  return GeogridKeyword.findAll({
+// Configs actives dues : next_run_at jamais calculé (NULL, ne devrait plus arriver — filet de sécurité,
+// même esprit que last_scanned_at NULL en G3) ou dépassé.
+async function findDueConfigs(limit) {
+  const now = new Date()
+  return GeogridConfig.findAll({
     where: {
       active: true,
-      [Op.or]: [
-        { last_scanned_at: null },
-        { frequency: 'weekly', last_scanned_at: { [Op.lte]: weeklyCutoff } },
-        { frequency: 'daily', last_scanned_at: { [Op.lte]: dailyCutoff } },
-      ],
+      [Op.or]: [{ next_run_at: null }, { next_run_at: { [Op.lte]: now } }],
     },
-    order: [[literal('last_scanned_at ASC NULLS FIRST')]],
+    order: [[literal('next_run_at ASC NULLS FIRST')]],
     limit,
   })
 }
 
-// Lance les scans des mots-clés dus, en parallèle par paquets de `concurrency`.
-// Ignore un mot-clé dont l'entreprise n'a plus le module au plan (downgrade) sans le relancer.
-async function runDueScans(batchSize, concurrency) {
-  const candidates = await findDueKeywords(batchSize)
+// Lance un rapport (run) pour une config due : avance next_run_at IMMÉDIATEMENT (avant tout scan, même
+// principe anti-boucle que last_scanned_at en G3 — un échec ne redéclenche pas le run à chaque tick),
+// puis scanne tous ses mots-clés actifs. Un échec de lancement sur UN mot-clé n'empêche pas les autres
+// (Promise.allSettled) et marque le run has_failures sans le faire échouer entièrement.
+async function launchRunForConfig(config) {
+  const business = await Business.findByPk(config.business_id)
+  const timezone = config.timezone || business?.timezone || 'Europe/Paris'
+  const anchor = config.next_run_at || new Date()
+  await config.update({ next_run_at: computeNextRunAt(config, timezone, anchor) })
+
+  const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
+  const run = await GeogridRun.create({
+    business_id: config.business_id,
+    location_id: config.location_id,
+    config_id: config.id,
+    trigger: 'scheduled',
+    status: keywords.length ? 'running' : 'done',
+    scheduled_for: anchor,
+    started_at: new Date(),
+    finished_at: keywords.length ? null : new Date(),
+    keywords_total: keywords.length,
+    keywords_done: 0,
+  })
+  if (!keywords.length) return run
+
+  const results = await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id })))
+  if (results.some(r => r.status === 'rejected')) await run.update({ has_failures: true })
+  return run
+}
+
+// Lance les rapports des configs dues, en parallèle par paquets de `concurrency`.
+// Ignore une config dont l'entreprise n'a plus le module au plan (downgrade) sans la relancer.
+async function runDueConfigs(batchSize, concurrency) {
+  const candidates = await findDueConfigs(batchSize)
   if (!candidates.length) return { launched: 0, skipped: 0, failed: 0 }
 
   const eligible = []
   let skipped = 0
-  for (const kw of candidates) {
-    const business = await Business.findByPk(kw.business_id)
+  for (const cfg of candidates) {
+    const business = await Business.findByPk(cfg.business_id)
     if (!business) { skipped++; continue }
     const quota = await getQuota(business)
     if (!quota.enabled) { skipped++; continue }
-    eligible.push(kw)
+    eligible.push(cfg)
   }
 
   let launched = 0
   let failed = 0
   for (let i = 0; i < eligible.length; i += concurrency) {
     const chunk = eligible.slice(i, i + concurrency)
-    const results = await Promise.allSettled(chunk.map(kw => submitScanForKeyword(kw)))
+    const results = await Promise.allSettled(chunk.map(cfg => launchRunForConfig(cfg)))
     launched += results.filter(r => r.status === 'fulfilled').length
     failed += results.filter(r => r.status === 'rejected').length
   }
   return { launched, skipped, failed }
+}
+
+// Clôture les runs dont tous les scans sont dans un état terminal (done/failed). has_failures se
+// déclenche aussi si moins de scans que de mots-clés visés existent (échec de lancement non rattrapé,
+// ex. crash pendant launchRunForConfig) — comportement auto-réparateur, cf. GEOGRID_REFONTE_FR.md §16.
+async function closeFinishedRuns() {
+  const running = await GeogridRun.findAll({ where: { status: 'running' } })
+  let closed = 0
+  for (const run of running) {
+    const scans = await GeogridScan.findAll({ where: { run_id: run.id }, attributes: ['status'] })
+    const unresolved = scans.filter(s => !['done', 'failed'].includes(s.status))
+    if (unresolved.length) continue
+
+    const failedCount = scans.filter(s => s.status === 'failed').length
+    const hasFailures = run.has_failures || failedCount > 0 || scans.length < run.keywords_total
+    await run.update({
+      status: 'done',
+      has_failures: hasFailures,
+      finished_at: new Date(),
+      keywords_done: scans.length - failedCount,
+    })
+    closed++
+  }
+  return { closed }
 }
 
 // Rafraîchit tous les scans en cours. Un seul appel tasks_ready pour tout le tick (partagé entre scans).
@@ -275,5 +343,5 @@ async function failStuckScans(timeoutMinutes) {
 
 module.exports = {
   createScan, refreshScan, listScans, getScan,
-  runDueScans, refreshRunningScans, failStuckScans,
+  runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans,
 }

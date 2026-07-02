@@ -110,7 +110,7 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 | # | Session | Contenu |
 |---|---------|---------|
 | G5 | Refonte modèle & config partagée | ✅ Fait (2026-07-02) — migration **additive** (4 nouvelles tables, `config_id`/`run_id`/top3-10-20, migration de données, quotas enrichis sans retirer les anciennes clés). Zéro régression vérifiée (DB réelle + preview). Cutover reporté à G6 (indissociable, voir `GEOGRID_REFONTE_FR.md` §16). Voir `PROGRESS.md` Phase 11. |
-| G6 | Backend — planning & grille cercle | Forme **cercle** (masque disque), `next_run_at` + enum `monthly`, refonte cron par **runs**, fuseau par localisation, `/grid-preview` étendu (forme + centre). |
+| G6 | Backend — planning & grille cercle | ✅ Fait (2026-07-02) — cutover complet : masque disque, `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé, `/grid-preview` étendu. Vérifié en direct (dont un vrai cycle run→scan DataForSEO). Voir `PROGRESS.md` Phase 11. |
 | G7 | Backend — concurrents & agrégats | Liste de concurrents, agrégats par scan (position moyenne + top 3/10/20 pour la fiche **et** chaque concurrent), endpoints `runs` / `trend` / `config`. |
 | G8 | Frontend — Configuration (wizard) | Section sidebar « POSITIONNEMENT », assistant 4 étapes (grille / mots-clés / planning / concurrents), édition pré-remplie, « premier rapport maintenant ». |
 | G9 | Frontend — Suivi | Vue globale + vue par mot-clé (lecture seule), tableaux triables (fiche + concurrents), heatmap réutilisée, courbes **Recharts** (période + jour/semaine/mois + moyenne/meilleure). |

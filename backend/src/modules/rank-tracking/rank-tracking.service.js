@@ -1,15 +1,18 @@
 const { Op } = require('sequelize')
 const GeogridKeyword = require('../../models/GeogridKeyword')
+const GeogridConfig = require('../../models/GeogridConfig')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
 const { buildGrid } = require('./geogrid.utils')
+const { computeNextRunAt } = require('./schedule.utils')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const FREQUENCIES = ['weekly', 'daily']
 const DEFAULT_GRID_SIZE = 7
 const DEFAULT_SPACING_M = 500
+const DEFAULT_RUN_HOUR = 4
+const DEFAULT_RUN_DAY_OF_WEEK = 1 // lundi
 
 async function ensureAccess(businessId, userId) {
   const business = await Business.findByPk(businessId)
@@ -43,43 +46,65 @@ async function assertQuotaAvailable(businessId, quota, excludeId) {
   }
 }
 
-function normalizeGridSize(requested, quota) {
-  const cap = quota.grid_size || DEFAULT_GRID_SIZE
-  let n = Number(requested)
-  if (!Number.isInteger(n) || n < 3) n = cap
+// Défauts d'une config auto-créée (aucune saisie utilisateur encore possible — les endpoints d'édition
+// de config arrivent en G7). Lit les nouvelles clés de quota (max_grid_size/allowed_frequencies), avec
+// repli sur les anciennes (grid_size/frequency) pour rester robuste pendant la transition — voir §16.
+function defaultGridSize(quota) {
+  const cap = quota.max_grid_size || quota.grid_size || DEFAULT_GRID_SIZE
+  let n = Math.min(DEFAULT_GRID_SIZE, cap)
   if (n % 2 === 0) n -= 1
-  return Math.min(n, cap)
+  return n < 3 ? 3 : n
 }
 
-function normalizeFrequency(requested, quota) {
-  const f = requested || quota.frequency || 'weekly'
-  if (!FREQUENCIES.includes(f)) throw { status: 400, message: 'Fréquence invalide' }
-  if (f === 'daily' && quota.frequency !== 'daily') {
-    throw { status: 403, message: "Le suivi quotidien n'est pas inclus dans votre plan" }
-  }
-  return f
+function defaultFrequency(quota) {
+  const allowed = quota.allowed_frequencies || (quota.frequency ? [quota.frequency] : ['weekly'])
+  return allowed.includes('weekly') ? 'weekly' : allowed[0]
 }
 
-async function create(businessId, userId, { location_id, keyword, grid_size, grid_spacing_m, frequency }) {
+// Récupère (ou crée avec des défauts sûrs) la config partagée d'une localisation — 1 par localisation.
+// Auto-provisioning : couvre aussi bien une localisation jamais configurée qu'un mot-clé créé avant que
+// l'utilisateur n'ait ouvert l'assistant de configuration (G8). Le next_run_at est calculé immédiatement
+// pour qu'aucune config active ne reste sans planification (cf. schedule.utils.js).
+async function ensureConfigForLocation(location, business) {
+  let config = await GeogridConfig.findOne({ where: { location_id: location.id } })
+  if (config) return config
+
+  const quota = await getQuota(business)
+  const frequency = defaultFrequency(quota)
+  const timezone = business.timezone || 'Europe/Paris'
+
+  config = await GeogridConfig.create({
+    business_id: business.id,
+    location_id: location.id,
+    shape: 'square',
+    grid_size: defaultGridSize(quota),
+    grid_spacing_m: quota.grid_spacing_m || DEFAULT_SPACING_M,
+    frequency,
+    run_hour: DEFAULT_RUN_HOUR,
+    run_day_of_week: frequency === 'weekly' ? DEFAULT_RUN_DAY_OF_WEEK : null,
+    run_day_of_month: frequency === 'monthly' ? 1 : null,
+    timezone,
+    active: true,
+  })
+  await config.update({ next_run_at: computeNextRunAt(config, timezone) })
+  return config
+}
+
+async function create(businessId, userId, { location_id, keyword }) {
   const business = await ensureAccess(businessId, userId)
-  await ensureLocation(location_id, businessId)
+  const location = await ensureLocation(location_id, businessId)
   if (!keyword || !keyword.trim()) throw { status: 400, message: 'Mot-clé requis' }
 
   const quota = await getQuota(business)
   await assertQuotaAvailable(businessId, quota)
-
-  const resolvedFrequency = normalizeFrequency(frequency, quota)
-  const resolvedGridSize = normalizeGridSize(grid_size, quota)
-  const resolvedSpacing = Number(grid_spacing_m) > 0 ? Number(grid_spacing_m) : (quota.grid_spacing_m || DEFAULT_SPACING_M)
+  const config = await ensureConfigForLocation(location, business)
 
   try {
     return await GeogridKeyword.create({
       business_id: businessId,
       location_id,
+      config_id: config.id,
       keyword: keyword.trim(),
-      grid_size: resolvedGridSize,
-      grid_spacing_m: resolvedSpacing,
-      frequency: resolvedFrequency,
       active: true,
     })
   } catch (err) {
@@ -103,7 +128,7 @@ async function getOne(id, businessId, userId) {
   return kw
 }
 
-async function update(id, businessId, userId, { keyword, active, grid_size, grid_spacing_m, frequency }) {
+async function update(id, businessId, userId, { keyword, active }) {
   const kw = await getOne(id, businessId, userId)
   const business = await Business.findByPk(businessId)
   const quota = await getQuota(business)
@@ -115,13 +140,6 @@ async function update(id, businessId, userId, { keyword, active, grid_size, grid
   if (active !== undefined) {
     if (active && !kw.active) await assertQuotaAvailable(businessId, quota, kw.id)
     kw.active = active
-  }
-  if (frequency !== undefined) kw.frequency = normalizeFrequency(frequency, quota)
-  if (grid_size !== undefined) kw.grid_size = normalizeGridSize(grid_size, quota)
-  if (grid_spacing_m !== undefined) {
-    const n = Number(grid_spacing_m)
-    if (!Number.isInteger(n) || n < 50) throw { status: 400, message: 'Espacement invalide (mètres, ≥ 50)' }
-    kw.grid_spacing_m = n
   }
 
   try {
@@ -146,17 +164,24 @@ async function getQuotaStatus(businessId, userId) {
   return { ...quota, used }
 }
 
-async function previewGrid(businessId, userId, { location_id, grid_size, grid_spacing_m }) {
+// Aperçu de grille (sans créer de scan ni de config) — accepte un centre et une forme optionnels
+// (GEOGRID_REFONTE_FR.md §6 : centre déplaçable + carré/cercle dans le futur wizard, G8). Défaut =
+// centré sur la fiche, carré, comme avant l'extension G6.
+async function previewGrid(businessId, userId, { location_id, grid_size, grid_spacing_m, shape, center_lat, center_lng }) {
   await ensureAccess(businessId, userId)
   const location = await ensureLocation(location_id, businessId)
   const n = grid_size ? Number(grid_size) : DEFAULT_GRID_SIZE
   const spacing = grid_spacing_m ? Number(grid_spacing_m) : DEFAULT_SPACING_M
+  const lat = center_lat != null ? Number(center_lat) : Number(location.lat)
+  const lng = center_lng != null ? Number(center_lng) : Number(location.lng)
+  const resolvedShape = shape || 'square'
   return {
-    center: { lat: Number(location.lat), lng: Number(location.lng) },
+    center: { lat, lng },
     grid_size: n,
     grid_spacing_m: spacing,
-    points: buildGrid(Number(location.lat), Number(location.lng), n, spacing),
+    shape: resolvedShape,
+    points: buildGrid(lat, lng, n, spacing, resolvedShape),
   }
 }
 
-module.exports = { create, list, getOne, update, remove, getQuotaStatus, previewGrid, getQuota, ensureAccess }
+module.exports = { create, list, getOne, update, remove, getQuotaStatus, previewGrid, getQuota, ensureAccess, ensureConfigForLocation }
