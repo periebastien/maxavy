@@ -23,6 +23,7 @@ const OnboardingPage   = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage      = lazy(() => import('./pages/CollectPage'))
 const GeogridPage      = lazy(() => import('./pages/GeogridPage'))
 const GeogridConfigPage = lazy(() => import('./pages/GeogridConfigPage'))
+const GeogridSuiviPage  = lazy(() => import('./pages/GeogridSuiviPage')) // G9 en construction — route de dev temporaire, remplace GeogridPage à /suivi une fois complet (voir §16 fin de session)
 
 function RequireBusiness({ children }) {
   const { isLoading: authLoading } = useAuth()
@@ -64,6 +65,8 @@ export default function App() {
       <Route path="/widgets/:id"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement/configuration" element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridConfigPage /></Suspense></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement/suivi"          element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridPage /></Suspense></RequireBusiness></PrivateRoute>} />
+      {/* G9 en construction (route de dev, non liée dans la sidebar) — remplacera /suivi une fois complet */}
+      <Route path="/positionnement/suivi-v2"       element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridSuiviPage /></Suspense></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement"                element={<Navigate to="/positionnement/configuration" replace />} />
       <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />

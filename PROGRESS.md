@@ -338,7 +338,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
 | G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
-| G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
+| G9 | Frontend — Suivi | 🚧 En cours | **G9.1 ✅** (2026-07-02) : Vue globale (sélecteur de rapport + tableau + flèches d'évolution). Reste **G9.2** (courbes, agrégation temporelle) et **G9.3** (vue par mot-clé + bascule finale). Voir détail ci-dessous |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
@@ -562,7 +562,24 @@ Plutôt qu'ajouter une étape distincte dans le stepper (aurait demandé de gér
 
 **Rough edge repéré en testant (non corrigé, hors-scope de ce correctif)** : le state `step` du wizard ne se réinitialise pas à 1 quand on change de localisation en cours de route sans recharger la page — passer de Marrakech (qui saute à l'étape 5) vers Essaouira laisse l'utilisateur "coincé" sur l'étape où il était (4 dans mon test), au lieu de repartir de l'étape 1 pour une fiche neuve. Correctif trivial (`else setStep(1)` dans le bootstrap `kws.length > 0`), à faire quand utile — signalé, pas appliqué sans validation.
 
-**Prochaine session : G9 — Frontend Suivi** (vue globale + par mot-clé, tableaux triables fiche+concurrents, courbes Recharts, retrait de l'ancienne `GeogridPage`).
+**Prochaine session initialement : G9 — Frontend Suivi.** Découpée en 3 sous-sessions (G9.1/G9.2/G9.3, validé avec l'utilisateur). **G9.1 faite dans la foulée (2026-07-02)** — voir détail ci-dessous.
+
+### Détail session G9.1 — Frontend : Vue globale (2026-07-02)
+
+Nouveau fichier `pages/GeogridSuiviPage.jsx`, câblé sur une **route de dev temporaire** `/positionnement/suivi-v2` (non liée dans la sidebar) — l'ancienne `GeogridPage` reste seule accessible via « Suivi » tant que le remplacement (vue par mot-clé incluse, G9.3) n'est pas complet.
+
+**Aucun backend nécessaire** pour cette sous-session : tout existait depuis G7 (`GET /runs`, `GET /runs/:id`). Contenu :
+- **Sélecteur de rapport** : liste des `geogrid_runs` terminés (`status: 'done'`) pour la localisation active, triés du plus récent au plus ancien, plus récent sélectionné par défaut.
+- **Tableau par mot-clé** (rapport sélectionné) : position moyenne (ATRP), top 3/10/20 — lues directement depuis `GeogridScan` (déjà figées au finalize depuis G7, `scan.keyword` dénormalisé évite un join).
+- **Flèche d'évolution vs rapport précédent** : calculée côté front (pas de nouvel endpoint) en récupérant aussi le rapport juste avant le sélectionné dans la liste triée, puis en comparant l'ATRP par `keyword_id`. Convention : ATRP est un **rang** (plus bas = mieux), donc une **baisse** du chiffre = amélioration = flèche verte vers le haut (pas l'inverse naïf).
+- **État vide** : aucun rapport → message + lien vers Configuration.
+- Pas encore de clic-vers-détail (stub volontairement absent — la vue par mot-clé est G9.3, inutile de créer un lien qui ne mène nulle part avant).
+
+**Bug trouvé et corrigé en testant** : le sélecteur affichait « Invalid Date ». Cause : `r.created_at` au lieu de `r.createdAt` — les timestamps auto-gérés par Sequelize restent en camelCase même sous `underscored: true` (contrairement aux champs explicites du modèle type `keyword_id`/`run_id`/`has_failures`, eux bien en snake_case). Corrigé aux 2 endroits (tri + affichage).
+
+**Vérifié en direct** (preview réel, compte de démo) : tableau affichant les 5 vrais mots-clés du rapport manuel lancé par l'utilisateur (ATRP 15.27 à 21.00 selon le mot-clé, top 3/10/20 cohérents), date correctement formatée après le correctif, colonne Évolution à « — » pour tous (cohérent : un seul rapport terminé à ce jour, donc pas de précédent à comparer — cette branche du code est bien exercée, la branche "avec delta réel" est une arithmétique triviale non testée en live faute d'un 2ᵉ rapport, mais vérifiée par relecture). Aucune erreur console/réseau.
+
+**Prochaine session : G9.2 — Courbes** (bucketing jour/semaine/mois + sélecteur moyenne/meilleure position, brique réutilisable, câblée sur la courbe multi-mots-clés de cette vue globale).
 
 ---
 
