@@ -16,7 +16,6 @@ const STEPS = [
   { id: 4, label: 'Concurrents', icon: Swords },
 ]
 
-const COST_PER_POINT = 0.0012 // $ — DataForSEO queue Priority (voir GEOGRID_DESIGN_FR.md §9)
 const SPACING_OPTIONS = [250, 500, 750, 1000, 1500, 2000]
 
 // Tailles impaires jusqu'au plafond du plan (grille N×N, N impair pour qu'un point tombe pile au centre).
@@ -176,11 +175,12 @@ export default function GeogridConfigPage() {
   const sizeOptions = gridSizeOptions(quota?.max_grid_size || 7)
   const pointCount = preview?.points?.length ?? 0
   const coverageKm = ((gridSize - 1) * spacing) / 1000
-  const cost = pointCount * COST_PER_POINT
+  // Rayon du contour de cercle (mode 'circle') = distance au coin de la grille (circonscrit) + petite marge.
+  const circleRadiusM = shape === 'circle' ? Math.round(((gridSize - 1) / 2) * spacing * Math.SQRT2 * 1.06) : 0
 
   return (
     <AppLayout title="Positionnement — Configuration">
-      <div className="max-w-5xl">
+      <div className="w-full">
         <div className="mb-8"><StepIndicator steps={STEPS} current={step} onStepClick={setStep} /></div>
 
         {error && (
@@ -189,84 +189,80 @@ export default function GeogridConfigPage() {
 
         {/* ── Étape 1 — Grille ── */}
         {step === 1 && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {!fiche && (
               <div className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
                 Cette localisation n'a pas de coordonnées GPS — impossible de centrer la grille.
               </div>
             )}
 
-            <div className="grid lg:grid-cols-[320px_1fr] gap-5">
-              {/* Contrôles */}
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-2">Forme de la grille</label>
-                  <div className="flex gap-2">
-                    <ShapeButton active={shape === 'square'} onClick={() => setShape('square')} icon={<Square size={15} />} label="Carré" />
-                    {allowedShapes.includes('circle') && (
-                      <ShapeButton active={shape === 'circle'} onClick={() => setShape('circle')} icon={<Circle size={15} />} label="Cercle" />
-                    )}
-                  </div>
-                </div>
+            {/* Carte pleine largeur */}
+            {center ? (
+              <GeogridConfigMap
+                center={center}
+                points={preview?.points || []}
+                shape={shape}
+                radiusMeters={circleRadiusM}
+                onCenterChange={onCenterChange}
+                fitToken={fitToken}
+                className="h-[560px]"
+              />
+            ) : (
+              <div className="h-[560px] rounded-2xl border border-border bg-bg-page flex items-center justify-center text-sm text-text-tertiary">
+                Pas de coordonnées pour afficher la carte.
+              </div>
+            )}
+            <p className="text-xs text-text-tertiary">Glissez le marqueur central sur la carte pour déplacer la zone analysée.</p>
 
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Densité de la grille</label>
-                  <select value={gridSize} onChange={e => changeSize(Number(e.target.value))}
-                    className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
-                    {sizeOptions.map(n => <option key={n} value={n}>{n} × {n}</option>)}
-                  </select>
-                  {quota?.max_grid_size && gridSize >= quota.max_grid_size && (
-                    <p className="text-xs text-text-tertiary mt-1">Densité maximale de votre plan.</p>
+            {/* Configuration sous la carte */}
+            <div className="bg-white border border-border rounded-2xl p-4 grid sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-2">Forme de la grille</label>
+                <div className="flex gap-2">
+                  <ShapeButton active={shape === 'square'} onClick={() => setShape('square')} icon={<Square size={15} />} label="Carré" />
+                  {allowedShapes.includes('circle') && (
+                    <ShapeButton active={shape === 'circle'} onClick={() => setShape('circle')} icon={<Circle size={15} />} label="Cercle" />
                   )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Espacement entre points</label>
-                  <select value={spacing} onChange={e => changeSpacing(Number(e.target.value))}
-                    className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
-                    {SPACING_OPTIONS.map(m => <option key={m} value={m}>{m < 1000 ? `${m} m` : `${fmtNum(m / 1000)} km`}</option>)}
-                  </select>
-                </div>
-
-                <button onClick={recenter} disabled={!fiche || !centerCustom}
-                  className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  <RotateCcw size={14} /> Recentrer sur la fiche
-                </button>
-
-                {/* Compteur live */}
-                <div className="bg-accent-light rounded-xl p-4 text-sm">
-                  <div className="flex items-center gap-2 text-accent font-semibold">
-                    {previewing ? <Loader2 size={14} className="animate-spin" /> : <LayoutGrid size={14} />}
-                    {pointCount} point{pointCount > 1 ? 's' : ''}
-                  </div>
-                  <div className="text-text-secondary mt-1.5 space-y-0.5 text-xs">
-                    <div>Couverture ~{fmtNum(coverageKm)} km de large</div>
-                    <div>Coût estimé ~{fmtNum(cost)} $ par rapport</div>
-                  </div>
                 </div>
               </div>
 
-              {/* Carte */}
-              {center ? (
-                <GeogridConfigMap
-                  center={center}
-                  points={preview?.points || []}
-                  onCenterChange={onCenterChange}
-                  fitToken={fitToken}
-                />
-              ) : (
-                <div className="h-[420px] rounded-2xl border border-border bg-bg-page flex items-center justify-center text-sm text-text-tertiary">
-                  Pas de coordonnées pour afficher la carte.
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5">Densité de la grille</label>
+                <select value={gridSize} onChange={e => changeSize(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                  {sizeOptions.map(n => <option key={n} value={n}>{n} × {n}</option>)}
+                </select>
+                {quota?.max_grid_size && gridSize >= quota.max_grid_size && (
+                  <p className="text-xs text-text-tertiary mt-1">Densité maximale de votre plan.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5">Espacement entre points</label>
+                <select value={spacing} onChange={e => changeSpacing(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                  {SPACING_OPTIONS.map(m => <option key={m} value={m}>{m < 1000 ? `${m} m` : `${fmtNum(m / 1000)} km`}</option>)}
+                </select>
+              </div>
             </div>
 
-            <div className="flex justify-between items-center pt-1">
-              <p className="text-xs text-text-tertiary">Glissez le marqueur central sur la carte pour déplacer la zone analysée.</p>
-              <Button onClick={saveGridAndNext} disabled={!fiche || saving || !pointCount}>
-                {saving ? <Loader2 size={15} className="animate-spin" /> : null}
-                Enregistrer et continuer
-              </Button>
+            {/* Recentrer · stats · bouton */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <button onClick={recenter} disabled={!fiche || !centerCustom}
+                className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <RotateCcw size={14} /> Recentrer sur la fiche
+              </button>
+
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-text-secondary flex items-center gap-2">
+                  {previewing && <Loader2 size={14} className="animate-spin text-accent" />}
+                  <span><b className="text-text-primary">{pointCount} point{pointCount > 1 ? 's' : ''}</b> · couverture ~{fmtNum(coverageKm)} km</span>
+                </span>
+                <Button onClick={saveGridAndNext} disabled={!fiche || saving || !pointCount}>
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : null}
+                  Enregistrer et continuer
+                </Button>
+              </div>
             </div>
           </div>
         )}

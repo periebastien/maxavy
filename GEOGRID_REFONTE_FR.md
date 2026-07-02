@@ -44,7 +44,7 @@ Rapport (« run ») = 1 exécution (planifiée ou manuelle)
 |---|-------|----------|
 | 1 | Structure config | **1 grille + 1 planning partagés par localisation**, mots-clés en dessous (fin du « config par mot-clé »). |
 | 2 | Config par localisation | **1 seule** config par localisation au MVP (pas plusieurs grilles concurrentes). |
-| 3 | Forme cercle | **Masque disque** sur la grille carrée (réutilise `row/col/quadrant`), pas d'anneaux concentriques. |
+| 3 | Forme cercle | **Contour circonscrit** dessiné autour de la grille N×N complète — **même nombre de points qu'en carré** (révisé 2026-07-02 sur retour utilisateur ; le masque disque initial est abandonné). |
 | 4 | Quota mots-clés | **Par localisation** (chaque localisation a son propre compteur). |
 | 5 | Fuseau planification | **Par localisation, défaut = fuseau de l'entreprise, éditable manuellement.** Pas de dérivation auto (simplicité, aucune dépendance ajoutée). |
 | 6 | Scan manuel | **Conservé** (« Lancer un rapport maintenant »), en plus du planning. |
@@ -174,22 +174,11 @@ Verrou plan : si `rank_tracking.enabled = false`, la section est verrouillée (c
 
 ### Étape 1 · La grille
 - **Carte** avec **centre déplaçable** (marqueur draggable) + bouton **« Recentrer sur la fiche »**. Stocké dans `config.center_lat/lng`.
-- **Forme** : carré / cercle. **Dimension** (dans le plafond du plan). **Espacement** (m).
-- **Compteur live** sous la carte : « **X points · couverture ~Y km · ~Z $/rapport** » (aperçu via `/grid-preview` étendu, sans scan).
-- Nombre de points par grille :
+- **Forme** : carré / cercle — **même nombre de points dans les deux cas** (décision produit, screenshot de référence 2026-07-02). Le cercle est un **contour de couverture circonscrit** dessiné autour de la grille N×N complète, PAS un masque qui retirerait les points des coins. **Dimension** (dans le plafond du plan). **Espacement** (m).
+- **Compteur live** (à côté du bouton « Enregistrer et continuer », sous la carte) : « **X points · couverture ~Y km** ». Aperçu via `/grid-preview` (sans scan). *Le coût en $ n'est pas affiché à l'utilisateur* (interne) — à terme, exprimé en « points par rapport au pack » quand ce modèle sera défini.
+- Nombre de points par grille (identique carré/cercle) : 3×3 → 9, 5×5 → 25, 7×7 → 49, 9×9 → 81, 11×11 → 121, 13×13 → 169, 15×15 → 225.
 
-| Dimension | Carré | Cercle (disque) |
-|---|---|---|
-| 3×3 | 9 | 5 |
-| 5×5 | 25 | 13 |
-| 7×7 | 49 | 29 |
-| 9×9 | 81 | 49 |
-| 11×11 | 121 | 81 |
-| 13×13 | 169 | 113 |
-| 15×15 | 225 | 149 |
-
-> Le **nombre de points** pilote le coût (plafonné par plan) ; l'**espacement** ne change que la couverture (libre). Le cercle ≈ un carré de 2 crans plus petit en nombre de points.
-> **Cercle = masque disque** : on génère la grille carrée N×N (N **impair**, inchangé) puis on ne garde/poste que les points `row² + col² ≤ half²` (`half = (N−1)/2`). Le centre est toujours inclus ; `points_total` = nombre de points du disque (les valeurs du tableau). Voir §16.
+> Le **nombre de points** (= N²) pilote le coût (plafonné par plan) ; l'**espacement** ne change que la couverture (libre). En mode cercle, le contour circonscrit a pour rayon la distance au coin de la grille (`(N−1)/2 × espacement × √2`), dessiné côté front (`google.maps.Circle`).
 
 ### Étape 2 · Les mots-clés
 - Ajout / suppression, compteur « **X / N** » borné au plan (par localisation). Validation backend inchangée (403 si dépassé).
@@ -334,8 +323,8 @@ Issues d'une relecture croisée cahier ↔ code réel. À intégrer dans les ses
 - `credits_used` reste **DECIMAL(10,4)** (déjà migré, migration 30) — ne pas régresser en INT.
 
 **Grille cercle**
-- Prédicat du disque : grille carrée N×N (N **impair**) → on ne garde/poste que `row² + col² ≤ half²` (`half = (N−1)/2`). Parité inchangée, centre inclus, `points_total` = points du disque.
-- **Rang par quadrant** : moyenne par quadrant → robuste au retrait des coins (moins de points, moyenne toujours valide). Métrique secondaire.
+- **Cercle = contour circonscrit** (révisé G8.1, 2026-07-02) : `buildGrid` renvoie la grille N×N **complète** quelle que soit la forme (même nombre de points). Le cercle est un `google.maps.Circle` dessiné côté front (rayon = `(N−1)/2 × espacement × √2 × 1.06`, coins de la grille juste à l'intérieur). Le masque disque initial (chop des coins → 29 pts pour 7×7) est abandonné.
+- **Rang par quadrant** : les 4 quadrants restent équilibrés (grille complète, pas de coins retirés). Métrique secondaire.
 
 **Concurrents**
 - `MAX_COMPETITORS` passe de **5 à ~20** en G7 (profondeur DataForSEO `depth=20` déjà en place → **aucun surcoût**). **L'agrégation rétroactive ne vaut que pour les scans postérieurs** à ce changement (les scans G1→G4 n'ont que 5 résultats/point).

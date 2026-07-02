@@ -1,8 +1,10 @@
-// Génère une grille de points GPS centrée sur (centerLat, centerLng), espacés de spacingM mètres.
-// N doit être impair (un point tombe pile sur le centre). Forme 'square' (défaut) = grille carrée
-// complète ; 'circle' = masque disque sur cette même grille carrée (row²+col² ≤ half², half=(N-1)/2) —
-// réutilise row/col/quadrant tels quels, aucune refonte du modèle géométrique. Voir GEOGRID_DESIGN_FR.md §2
-// et GEOGRID_REFONTE_FR.md §6/§16 (prédicat du disque, vérifié : 7×7→29 pts, 9×9→49 pts, 5×5→13 pts).
+// Génère une grille carrée N×N de points GPS centrée sur (centerLat, centerLng), espacés de spacingM
+// mètres. N doit être impair (un point tombe pile sur le centre). La FORME ('square' | 'circle') ne
+// change PAS les points générés : les deux renvoient la grille N×N complète (N² points) — décision
+// produit (GEOGRID_REFONTE_FR.md §6) : « même nombre de points en cercle et en carré ». Le cercle est
+// un CONTOUR de couverture dessiné côté front autour de la grille complète (cercle circonscrit), pas un
+// masque qui supprimerait les points des coins. `shape` est validé + conservé (config/affichage), mais
+// n'influe pas sur la génération ici.
 
 const METERS_PER_DEGREE_LAT = 111320
 const SHAPES = ['square', 'circle']
@@ -32,8 +34,6 @@ function buildGrid(centerLat, centerLng, gridSize, spacingM, shape = 'square') {
   const points = []
   for (let row = half; row >= -half; row--) {
     for (let col = -half; col <= half; col++) {
-      if (shape === 'circle' && row * row + col * col > half * half) continue
-
       const lat = centerLat + (row * spacingM) / METERS_PER_DEGREE_LAT
       const lng = centerLng + (col * spacingM) / metersPerDegreeLng
       points.push({
