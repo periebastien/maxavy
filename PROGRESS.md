@@ -338,7 +338,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
 | G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
-| G9 | Frontend — Suivi | 🚧 En cours | **G9.1 ✅** + **G9.2 ✅** (2026-07-02) : Vue globale complète (tableau + courbe multi-mots-clés, agrégation temporelle). Reste **G9.3** (vue par mot-clé + bascule finale). Voir détail ci-dessous |
+| G9 | Frontend — Suivi | ✅ Terminé (2026-07-02) | **G9.1** : vue globale (tableau). **G9.2** : courbes (agrégation temporelle). **G9.3** : vue par mot-clé (carte + métriques + tableau concurrents triable) + bascule finale de route, ancienne `GeogridPage` retirée. Voir détail ci-dessous |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
@@ -596,7 +596,26 @@ Nouveau fichier `pages/GeogridSuiviPage.jsx`, câblé sur une **route de dev tem
 
 **Incident de session (résolu, sans rapport avec le code livré)** : mes rechargements répétés pendant la vérification ont épuisé le rate-limit global de l'API (100 req/15 min, `app.js`) puis fait perdre le token de connexion (l'appli se déconnecte sur un échec de `/auth/me`). Résolu en redémarrant le backend (rate-limit en mémoire, réinitialisé instantanément) puis en se reconnectant. Aucune conséquence sur le code ou les données.
 
-**Prochaine session : G9.3 — Vue par mot-clé + bascule finale** (extension backend `GET /scans/:id` + agrégats concurrents, heatmap réutilisée, cartes de métriques, tableau triable « ma fiche + concurrents », réutilisation de la courbe ci-dessus, puis bascule de route et retrait de l'ancienne `GeogridPage`).
+**Prochaine session initialement : G9.3.** Faite dans la foulée (2026-07-02) — voir détail ci-dessous.
+
+### Détail session G9.3 — Frontend : Vue par mot-clé + bascule finale (2026-07-02)
+
+**Backend** — `scan.service.js` : `getScan()` étendu, renvoie désormais aussi `competitors` (`GeogridScanCompetitor` du scan, triés par `avg_position` ASC) en plus de `scan`/`points`. Champ additif, vérifié rétro-compatible (un scan ancien sans concurrents renvoie `competitors: []`).
+
+**Frontend** — `GeogridSuiviPage.jsx` : clic sur une ligne du tableau (Vue Globale) → `selectedKeywordId`, bascule vers une Vue Par Mot-Clé dédiée (le rendu principal teste `if (selectedKeywordId)` avant de retomber sur la Vue Globale) :
+- 4 `MetricCard` (ARP / ATRP / SoLV / note de la fiche),
+- `GeogridMap` réutilisée (heatmap déjà construite en G4, aucune modification),
+- `CompetitorTable` (nouveau) : fusionne la ligne « Ma fiche » avec les concurrents du scan, triable par colonne (défaut = position moyenne croissante),
+- courbe de tendance réutilisée de G9.2 en version mono-série,
+- bouton « Retour à la vue globale ».
+
+**Fix backend en profitant** : la détection de concurrents (`competitor.service.js`, G7) ne se recalculait qu'à la finalisation d'un scan ou via `POST /competitors/recompute` manuel — un concurrent ajouté via le wizard restait donc absent des scans historiques antérieurs à son ajout. `GeogridConfigPage.jsx` (`addCompetitor`) déclenche maintenant un `recompute` automatique (fire-and-forget) juste après la création.
+
+**Bascule finale de route** : `App.jsx` — suppression de l'import `GeogridPage` et de la route de dev `/positionnement/suivi-v2` ; `/positionnement/suivi` pointe désormais directement sur `GeogridSuiviPage`. Suppression du fichier `pages/GeogridPage.jsx` (plus aucune référence, `GeogridMap.jsx` conservé car réutilisé par la nouvelle page).
+
+**Vérifié en preview réel** sur la vraie route `/positionnement/suivi` (pas la route de dev) : Vue Globale (tableau 5 mots-clés), clic → Vue Par Mot-Clé (ARP 11.50 / ATRP 20.61 / SoLV 0% / note 4.6, carte rendue, tableau concurrents trié correctement), bouton Retour → Vue Globale. ⚠️ Une erreur React (`error boundary` générique) est apparue une fois juste après l'édition de route + suppression du fichier, avant tout rechargement — un `window.location.reload()` l'a fait disparaître définitivement (état HMR périmé après suppression de fichier + édition de route pendant la même session Vite, pas un bug du code livré).
+
+**Fin de G9** (3/3 sous-sessions). **Prochaine session : G10 — Frontend Concurrents** (page de comparaison dédiée + courbes, cf. `PLAN_SESSIONS.md` Phase 11).
 
 ---
 

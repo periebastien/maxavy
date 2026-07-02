@@ -8,6 +8,7 @@ const GeogridRun = require('../../models/GeogridRun')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const GeogridCompetitor = require('../../models/GeogridCompetitor')
+const GeogridScanCompetitor = require('../../models/GeogridScanCompetitor')
 const { buildGrid } = require('./geogrid.utils')
 const { computeNextRunAt } = require('./schedule.utils')
 const provider = require('./providers')
@@ -220,13 +221,16 @@ async function listScans(businessId, userId, keywordId) {
   return GeogridScan.findAll({ where, order: [['created_at', 'DESC']], limit: 50 })
 }
 
+// competitors : agrégats déjà calculés au finalize (G7, GeogridScanCompetitor) — pas de recalcul ici,
+// triés par avg_position (les plus proches de la fiche en tête, cohérent avec le tableau triable G9.3).
 async function getScan(scanId, businessId, userId) {
   await ensureAccess(businessId, userId)
   if (!UUID_RE.test(scanId)) throw { status: 404, message: 'Scan introuvable' }
   const scan = await GeogridScan.findOne({ where: { id: scanId, business_id: businessId } })
   if (!scan) throw { status: 404, message: 'Scan introuvable' }
   const points = await GeogridPoint.findAll({ where: { scan_id: scan.id }, order: [['row', 'DESC'], ['col', 'ASC']] })
-  return { scan, points }
+  const competitors = await GeogridScanCompetitor.findAll({ where: { scan_id: scan.id }, order: [['avg_position', 'ASC']] })
+  return { scan, points, competitors }
 }
 
 // ============ Fonctions cron (G3, refondues en G6) — sans contexte utilisateur, jobs/scan-geogrid.js ============

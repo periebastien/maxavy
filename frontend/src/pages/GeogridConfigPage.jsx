@@ -277,6 +277,9 @@ export default function GeogridConfigPage() {
       const created = await api.post(`/api/v1/rank-tracking/competitors?business_id=${bid}`, { config_id: configId, place_id, name })
       setCompetitors(c => [...c, created])
       setDetectedList(d => d.filter(x => x.place_id !== place_id))
+      // Backfill immédiat sur l'historique (GEOGRID_REFONTE_FR.md §16) — sans ça, le nouveau concurrent
+      // resterait absent de tous les scans déjà terminés jusqu'au prochain rapport (repéré en G9.3).
+      api.post(`/api/v1/rank-tracking/competitors/recompute?business_id=${bid}`, { config_id: configId }).catch(() => {})
     } catch (e) {
       setError(e.message)
     }
