@@ -104,6 +104,7 @@ export default function GeogridConfigPage() {
   const [detectedList, setDetectedList] = useState([])
   const [loadingDetected, setLoadingDetected] = useState(false)
   const [detectedLoaded, setDetectedLoaded] = useState(false)
+  const [hasCompletedRun, setHasCompletedRun] = useState(false) // au moins un rapport déjà terminé sur cette fiche
 
   // Étape 5 — récap
   const [runLaunched, setRunLaunched] = useState(null)
@@ -124,11 +125,13 @@ export default function GeogridConfigPage() {
       api.get(`/api/v1/rank-tracking/quota?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/config?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/keywords?business_id=${bid}&location_id=${locId}`),
+      api.get(`/api/v1/rank-tracking/runs?business_id=${bid}&location_id=${locId}`),
     ])
-      .then(async ([q, cfg, kws]) => {
+      .then(async ([q, cfg, kws, runs]) => {
         if (cancelled) return
         setQuota(q)
         setKeywords(kws)
+        setHasCompletedRun(runs.some(r => r.status === 'done'))
         if (q.enabled) {
           setShape(cfg.shape || 'square')
           setGridSize(cfg.grid_size || 7)
@@ -160,10 +163,11 @@ export default function GeogridConfigPage() {
     return () => { cancelled = true }
   }, [bid, locId])
 
-  // Concurrents détectés (chargement paresseux, seulement à la visite de l'étape 4 — requête plus lourde,
-  // pas nécessaire tant que l'utilisateur ne l'a pas ouverte).
+  // Concurrents détectés (chargement paresseux, seulement à la visite de l'étape 4). Inutile de
+  // l'appeler tant qu'aucun rapport n'a jamais tourné sur cette fiche — le résultat serait forcément
+  // vide (aucun point scanné à analyser) ; voir le bandeau "premier rapport" affiché dans ce cas.
   useEffect(() => {
-    if (step !== 4 || !configId || detectedLoaded) return
+    if (step !== 4 || !configId || detectedLoaded || !hasCompletedRun) return
     let cancelled = false
     setLoadingDetected(true)
     api.get(`/api/v1/rank-tracking/competitors/detected?business_id=${bid}&config_id=${configId}`)
@@ -171,7 +175,7 @@ export default function GeogridConfigPage() {
       .catch(e => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoadingDetected(false) })
     return () => { cancelled = true }
-  }, [step, configId, bid, detectedLoaded])
+  }, [step, configId, bid, detectedLoaded, hasCompletedRun])
 
   // Aperçu de la grille (débounce) à chaque changement de forme/taille/espacement/centre
   useEffect(() => {
@@ -596,23 +600,40 @@ export default function GeogridConfigPage() {
                 <p className="text-xs text-text-tertiary">{competitors.length} / {quota.max_competitors} concurrents suivis</p>
               )}
 
-              {loadingDetected ? (
-                <div className="flex items-center gap-2 text-xs text-text-tertiary pt-2 border-t border-border">
-                  <Loader2 size={13} className="animate-spin" /> Recherche des concurrents déjà repérés dans vos scans…
-                </div>
-              ) : detectedList.length > 0 && (
-                <div className="pt-3 border-t border-border">
-                  <p className="text-xs font-medium text-text-secondary mb-2">Concurrents repérés dans vos scans — triés du plus au moins visible</p>
-                  <div className="flex flex-wrap gap-2">
-                    {detectedList.map(d => (
-                      <button key={d.place_id} onClick={() => addCompetitor(d.place_id, d.name)} disabled={atMaxCompetitors}
-                        className="inline-flex items-center gap-2 text-xs pl-2.5 pr-3 h-8 rounded-full border border-border hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                        <Plus size={12} className="shrink-0" />
-                        <span className="max-w-[200px] truncate">{d.name || d.place_id}</span>
-                        <span className="text-text-tertiary shrink-0">{d.appearances}× · Ø{d.avg_rank_when_seen}</span>
-                      </button>
-                    ))}
+              {hasCompletedRun ? (
+                loadingDetected ? (
+                  <div className="flex items-center gap-2 text-xs text-text-tertiary pt-2 border-t border-border">
+                    <Loader2 size={13} className="animate-spin" /> Recherche des concurrents déjà repérés dans vos scans…
                   </div>
+                ) : detectedList.length > 0 && (
+                  <div className="pt-3 border-t border-border">
+                    <p className="text-xs font-medium text-text-secondary mb-2">Concurrents repérés dans vos scans — triés du plus au moins visible</p>
+                    <div className="flex flex-wrap gap-2">
+                      {detectedList.map(d => (
+                        <button key={d.place_id} onClick={() => addCompetitor(d.place_id, d.name)} disabled={atMaxCompetitors}
+                          className="inline-flex items-center gap-2 text-xs pl-2.5 pr-3 h-8 rounded-full border border-border hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                          <Plus size={12} className="shrink-0" />
+                          <span className="max-w-[200px] truncate">{d.name || d.place_id}</span>
+                          <span className="text-text-tertiary shrink-0">{d.appearances}× · Ø{d.avg_rank_when_seen}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              ) : runLaunched ? (
+                <div className="pt-3 border-t border-border text-xs text-text-secondary flex items-center gap-2">
+                  <Loader2 size={13} className="animate-spin text-accent" />
+                  Rapport en cours — revenez d'ici quelques minutes pour voir vos concurrents détectés automatiquement.
+                </div>
+              ) : (
+                <div className="pt-3 border-t border-border">
+                  <p className="text-xs text-text-secondary">
+                    Aucun rapport n'a encore été exécuté sur cette fiche — on ne peut pas encore détecter vos concurrents automatiquement.
+                  </p>
+                  <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length} className="mt-2.5">
+                    {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
+                    Lancer un premier rapport maintenant
+                  </Button>
                 </div>
               )}
             </div>
