@@ -6,6 +6,7 @@ const GeogridScan = sequelize.define('GeogridScan', {
   business_id:           { type: DataTypes.UUID, allowNull: false },
   location_id:           { type: DataTypes.UUID, allowNull: false },
   keyword_id:            { type: DataTypes.UUID, allowNull: false },
+  run_id:                { type: DataTypes.UUID }, // rapport ayant déclenché ce scan (refonte G5+) — null = scan "legacy" (G1→G4) ou hors run
   keyword:               { type: DataTypes.STRING, allowNull: false }, // snapshot au moment du scan
   grid_size:             { type: DataTypes.INTEGER, allowNull: false },
   grid_spacing_m:        { type: DataTypes.INTEGER, allowNull: false },
@@ -20,6 +21,9 @@ const GeogridScan = sequelize.define('GeogridScan', {
   review_count_snapshot:  { type: DataTypes.INTEGER },
   points_total:           { type: DataTypes.INTEGER },
   points_ranked:          { type: DataTypes.INTEGER },
+  points_top3:            { type: DataTypes.INTEGER }, // figé au finalize (refonte G5+), comme arp/atrp/solv
+  points_top10:           { type: DataTypes.INTEGER },
+  points_top20:           { type: DataTypes.INTEGER },
   credits_used:           { type: DataTypes.DECIMAL(10, 4) }, // coût fournisseur en $ (fractionnaire)
   error_message:          { type: DataTypes.TEXT },
   scanned_at:             { type: DataTypes.DATE },

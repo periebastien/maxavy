@@ -305,8 +305,8 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 
 ## PHASE 11 — SUIVI DE POSITIONNEMENT (GEOGRID) *(post-MVP, planifié)*
 
-> 📐 Spec technique complète : **`GEOGRID_DESIGN_FR.md`** — cahier des charges §9.5.
-> Module de heatmap de classement local Google Maps. **Décisions actées (2026-07-01)** : source = **DataForSEO** (API SERP géolocalisée, provider abstrait — pas de proxys à gérer côté nous) ; facturation = **gating par plan** (Gratuit exclu, Starter bridé à 5 mots-clés, Pro/Agence à ajuster) ; périmètre = **complet** (grille + heatmap + multi mots-clés + historique/timeline). Ancrage déjà en base (`locations.lat/lng` + `google_place_id`).
+> 📐 Spec technique du socle : **`GEOGRID_DESIGN_FR.md`** — cahier des charges §9.5.
+> 🧭 **Refonte (2026-07-02)** — wizard config + suivi + concurrents + rapport email : **`GEOGRID_REFONTE_FR.md`**. Remplace le plan G5 initial (« timeline & polish ») par un découpage G5→G12 plus large. Décisions actées : source = **DataForSEO** ; facturation = **gating par plan, plafonds éditables en Super Admin (G12)** ; périmètre = **complet** (grille wizard + heatmap + multi mots-clés + concurrents + timeline + rapport email). Ancrage déjà en base (`locations.lat/lng` + `google_place_id`).
 
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
@@ -314,7 +314,14 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G2 | Backend — provider & scan | ✅ Terminé | `providers/` (interface + `dataforseo.provider`), `scan.service.js` (création + polling + finalisation), endpoints scans, calcul ARP/ATRP/SoLV. Testé avec un vrai scan DataForSEO (25 points, données réelles). Voir détail ci-dessous |
 | G3 | Backend — cron & poll | ✅ Terminé | `jobs/scan-geogrid.js` (boucle 90s : timeout + poll + lancement des dus), scalabilité (lot/concurrence/pool bornés), paramètres `.env`. Testé cron réel de bout en bout (scan lancé + terminé en autonomie). Voir détail ci-dessous |
 | G4 | Frontend — heatmap | ✅ Terminé | `GeogridPage` (`/positionnement`, lazy) + `GeogridMap` (carte Google + pastilles rang colorées + InfoWindow concurrents), gestion mots-clés, gating par plan, scan + polling, métriques. Vérifié avec données réelles (structure/metrics/API OK). Voir détail ci-dessous |
-| G5 | Frontend — timeline & polish | ⬜ À faire | Courbes ARP/ATRP/SoLV, scan à la demande (Live), verrou par plan, états vides/loaders |
+| G5 | Refonte — modèle & config partagée | ✅ Terminé (2026-07-02) | Migration **additive uniquement** (expand, pas de contract) : 4 nouvelles tables + colonnes + migration de données. Voir détail ci-dessous |
+| G6 | Backend — planning & grille cercle | ⬜ À faire | Forme cercle (masque disque), `next_run_at` + enum `monthly`, cutover cron par runs, `/grid-preview` étendu — cf. `GEOGRID_REFONTE_FR.md` §16 (G5+G6 à livrer comme un cutover cohérent) |
+| G7 | Backend — concurrents & agrégats | ⬜ À faire | Agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints runs/trend/config |
+| G8 | Frontend — Configuration (wizard) | ⬜ À faire | Section sidebar, wizard 4 étapes, édition, premier rapport |
+| G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
+| G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
+| G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
+| G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
 
 > **Dépendances front à ajouter** au dev : lib carte (Google Maps déjà chargé via `@googlemaps/js-api-loader` — sinon Leaflet) + lib chart (aucune présente).
 > **`.env` backend** : `RANK_PROVIDER`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` déjà renseignés (2026-07-01), identifiants validés contre l'API DataForSEO (solde ~0,69 $).
@@ -398,7 +405,26 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 
 **Démo laissée en place pour vérif visuelle utilisateur** : entreprise de test **Atlasimmobilier** passée en plan **Starter** + 1 mot-clé « agence immobiliere marrakech » avec un scan terminé → visible sur `/positionnement` via le compte de test (à reverter : `plan_id` → `null` + purge geogrid_* quand terminé).
 
-**Prochaine session : G5 — timeline & polish** (courbes ARP/ATRP/SoLV dans le temps — nécessite d'ajouter une lib de graphe, aucune présente ; scan à la demande déjà là ; états vides/loaders déjà en place).
+**Prochaine session initialement prévue : G5 — timeline & polish.** Remplacée le 2026-07-02 par la refonte cadrée dans `GEOGRID_REFONTE_FR.md` (wizard config + suivi + concurrents + rapport email + planification fine + quotas éditables Super Admin) — nouveau découpage G5→G12 ci-dessus. La timeline devient **G9**.
+
+### Détail session G5 — Refonte : modèle & config partagée (2026-07-02)
+
+**Approche retenue : migration additive (« expand »), pas de cutover.** Plutôt que de migrer `grid_size`/`grid_spacing_m`/`frequency`/`last_scanned_at` hors de `geogrid_keywords` en une passe (ce qui aurait cassé `findDueKeywords`/`submitScanForKeyword` tant que le cron n'est pas réécrit), G5 se limite à **ajouter** les nouvelles tables/colonnes et à **peupler** les configs depuis les données existantes — zéro changement de comportement. Le cutover (retrait des anciennes colonnes, bascule du cron sur `next_run_at`/runs, réécriture `normalizeGridSize`/`normalizeFrequency`) est explicitement reporté à **G6**, livré comme une unité cohérente avec G5 (cf. `GEOGRID_REFONTE_FR.md` §16 « G5 et G6 indissociables »).
+
+**8 migrations (20260702000032→039)** :
+- `geogrid_configs` (1/localisation, UNIQUE `location_id`) — grille (centre/forme/taille/espacement), planning (fréquence/heure/jour/fuseau/`next_run_at`), rapport email (destinataires/cadence).
+- `geogrid_competitors` (concurrents par config, UNIQUE `config_id`+`place_id`).
+- `geogrid_runs` (1 exécution = N scans, avec `has_failures` pour les runs partiellement échoués — cf. §16).
+- `geogrid_scan_competitors` (agrégats concurrent par scan : position moyenne, top 3/10/20).
+- `geogrid_keywords.config_id` (nullable, `onDelete: SET NULL`) et `geogrid_scans.run_id`/`points_top3`/`points_top10`/`points_top20` (idem, scans « legacy » restent `run_id: null`).
+- **Migration de données** : pour chaque localisation ayant des mots-clés, crée 1 `geogrid_config` (valeurs du mot-clé le plus récent, fuseau = `business.timezone`), rattache tous les mots-clés de la localisation.
+- **Quotas enrichis additivement** : `max_grid_size`/`allowed_shapes`/`allowed_frequencies`/`max_competitors` ajoutés à `plans.module_quotas.rank_tracking` **sans retirer** les anciennes clés (fusion jsonb `||`) — le code actuel (`normalizeGridSize`/`normalizeFrequency`) continue de lire les anciennes clés sans régression.
+
+**Vérifié contre la vraie base PostgreSQL** : les 8 migrations appliquées sans erreur. Requête post-migration confirmée : 1 `geogrid_config` créée pour Atlasimmobilier (grille 7×7/500m/hebdo reprise du mot-clé existant, **`timezone: "Africa/Casablanca"`** dérivé de `business.timezone` — pas le défaut Europe/Paris, cohérent avec la démo Marrakech), mot-clé « agence immobilière » rattaché via `config_id`. Quotas Starter/Pro/Agence enrichis avec les nouvelles clés en conservant les anciennes ; Gratuit inchangé (toujours sans clé `rank_tracking`).
+
+**Non-régression vérifiée en preview réel** (backend redémarré, compte de test, business Atlasimmobilier) : `/positionnement` inchangée — mot-clé, quota 1/5, 4 `MetricCard` (ARP 14.63, ATRP 19.96, SoLV 2 %, note 4.6/25 avis), grille 7×7 · 8/49 points classés. Tous les appels API `rank-tracking` (`/quota`, `/keywords`, `/scans`, `/scans/:id`) → 200 OK. Aucune erreur console/réseau. (Écran de la carte non capturable en navigateur headless — limitation documentée depuis G4, pas un bug.)
+
+**Prochaine session : G6 — backend planning & grille cercle** (masque disque, `next_run_at` + enum `monthly`, cutover cron par runs, `/grid-preview` étendu — cf. `GEOGRID_REFONTE_FR.md` §16 pour le détail technique du cutover).
 
 ---
 

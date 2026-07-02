@@ -8,7 +8,7 @@ const Plan = sequelize.define('Plan', {
   price:                 { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   monthly_credits:       { type: DataTypes.INTEGER, defaultValue: 0 },
   features:              { type: DataTypes.JSONB, defaultValue: [] },
-  module_quotas:         { type: DataTypes.JSONB, defaultValue: {} }, // config machine-readable par module_key, ex: { rank_tracking: { enabled, max_keywords, grid_size, grid_spacing_m, frequency } }
+  module_quotas:         { type: DataTypes.JSONB, defaultValue: {} }, // config machine-readable par module_key. rank_tracking (legacy G1-G4): { enabled, max_keywords, grid_size, grid_spacing_m, frequency }, enrichi (refonte G5+): + { max_grid_size, allowed_shapes, allowed_frequencies, max_competitors } — cutover complet des anciennes clés prévu en G6. Éditable en Super Admin (G12).
   stripe_product_id:     { type: DataTypes.STRING },
   stripe_price_id:       { type: DataTypes.STRING },
   stripe_price_id_yearly: { type: DataTypes.STRING },

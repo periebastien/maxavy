@@ -5,6 +5,7 @@ const GeogridKeyword = sequelize.define('GeogridKeyword', {
   id:             { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
   business_id:    { type: DataTypes.UUID, allowNull: false },
   location_id:    { type: DataTypes.UUID, allowNull: false },
+  config_id:      { type: DataTypes.UUID }, // rattachement à la config partagée de la localisation (refonte G5+) — null = pas encore migré/rattaché
   keyword:        { type: DataTypes.STRING, allowNull: false },
   grid_size:      { type: DataTypes.INTEGER, defaultValue: 7 },
   grid_spacing_m: { type: DataTypes.INTEGER, defaultValue: 500 },

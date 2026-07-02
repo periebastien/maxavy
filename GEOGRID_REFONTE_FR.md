@@ -3,7 +3,7 @@
 > Cahier des charges de la **refonte UX + fonctionnelle** du module de suivi de positionnement (code : `rank-tracking` / geogrid).
 > Socle technique (grille, provider DataForSEO, cron, scans/points, métriques) : **`GEOGRID_DESIGN_FR.md`** — toujours valable, réutilisé.
 > Vue produit dans le cahier global : `CAHIER_CHARGES_MVP_EXTENSIBLE_FR.md` §9.5. Sessions : `PLAN_SESSIONS.md` Phase 11.
-> Dernière mise à jour : 2026-07-02 (cadrage refonte, avant développement).
+> Dernière mise à jour : 2026-07-02 (cadrage validé, décisions figées — développement G5 lancé).
 
 ---
 
@@ -46,7 +46,7 @@ Rapport (« run ») = 1 exécution (planifiée ou manuelle)
 | 2 | Config par localisation | **1 seule** config par localisation au MVP (pas plusieurs grilles concurrentes). |
 | 3 | Forme cercle | **Masque disque** sur la grille carrée (réutilise `row/col/quadrant`), pas d'anneaux concentriques. |
 | 4 | Quota mots-clés | **Par localisation** (chaque localisation a son propre compteur). |
-| 5 | Fuseau planification | **Par localisation** (dérivé des coordonnées, défaut = fuseau de l'entreprise). |
+| 5 | Fuseau planification | **Par localisation, défaut = fuseau de l'entreprise, éditable manuellement.** Pas de dérivation auto (simplicité, aucune dépendance ajoutée). |
 | 6 | Scan manuel | **Conservé** (« Lancer un rapport maintenant »), en plus du planning. |
 | 7 | Métrique affichée | Chiffre unique **« Position moyenne (couverture) »** dans tableaux + courbes ; « visible » et « part de voix » en indicateurs secondaires. Sélecteur de métrique possible plus tard. |
 | 8 | Agrégation temporelle | Sélecteur **« Moyenne de la période » / « Meilleure position »** (voir §4). |
@@ -344,7 +344,7 @@ Issues d'une relecture croisée cahier ↔ code réel. À intégrer dans les ses
 
 **Planification**
 - `next_run_at` calculé **tz-aware** (fréquence + heure + jour + fuseau, clamp 29–31 → dernier jour du mois) → nécessite une **lib de dates tz-aware** (ex. **Luxon** ou `date-fns-tz`), dépendance à ajouter en G6.
-- **Fuseau** : MVP = défaut `business.timezone`, **éditable manuellement** sur la config. Dérivation auto depuis les coordonnées = **optionnelle** via une lib type `geo-tz` (dépendance à décider — question ouverte).
+- **Fuseau** : décision actée — défaut `business.timezone`, **éditable manuellement** sur la config. Pas de dérivation auto depuis les coordonnées (pas de dépendance `geo-tz`).
 - **Statut d'un run partiel** : `done` quand tous les scans sont terminés ; `keywords_done` peut être < `keywords_total`. Ajouter un booléen `has_failures`. L'email part quand même, avec les mots-clés réussis (mention des échecs).
 
 **Suivi & courbes**
@@ -356,7 +356,7 @@ Issues d'une relecture croisée cahier ↔ code réel. À intégrer dans les ses
 - Ajouts : `GET /runs`, `GET /runs/:id`, `GET /trend` (séries agrégées), `GET/PUT /config`, `GET/POST/DELETE /competitors`, `POST /competitors/recompute`.
 
 **Quota par localisation**
-- `assertQuotaAvailable` / `getQuotaStatus` comptent aujourd'hui **par business** ; G5/G8 ajoutent le filtre `location_id`. Implication : un business multi-localisations obtient `max_keywords × nb localisations` mots-clés au total (borné par le nb de localisations du plan) → **impact coût** à garder en tête.
+- `assertQuotaAvailable` / `getQuotaStatus` comptent aujourd'hui **par business** ; G5/G8 ajoutent le filtre `location_id`. Décision actée : quota **par localisation** (chaque fiche a son propre compteur de mots-clés). Le plan **Starter reste à 1 seule localisation** (limite déjà existante ailleurs dans le SaaS), donc pas d'effet multiplicateur à ce niveau ; Pro/Agence autorisant plusieurs fiches, le volume total suit naturellement le nombre de localisations — **tous les plafonds restent éditables en Super Admin (G12)** si l'usage réel demande un ajustement.
 
 **Conventions**
 - `email_recipients` = emails de clients finaux (données personnelles) → **chiffrés AES-256-GCM** via le helper projet (comme `customers.email`), pas en clair (§3).
