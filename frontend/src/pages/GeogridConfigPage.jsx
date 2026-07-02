@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Loader2, Lock, LayoutGrid, Search, CalendarClock, Swords, Square, Circle, RotateCcw } from 'lucide-react'
+import {
+  MapPin, Loader2, Lock, LayoutGrid, Search, CalendarClock, Swords, Square, Circle, RotateCcw,
+  Trash2, Plus, Clock, Globe,
+} from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import StepIndicator from '../components/common/StepIndicator'
 import GeogridConfigMap from '../components/GeogridConfigMap'
 import Button from '../components/common/Button'
+import Select from '../components/common/Select'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
@@ -17,6 +21,27 @@ const STEPS = [
 ]
 
 const SPACING_OPTIONS = [250, 500, 750, 1000, 1500, 2000]
+
+const FREQUENCY_LABELS = { daily: 'Quotidien', weekly: 'Hebdomadaire', monthly: 'Mensuel' }
+const FREQUENCY_ORDER = ['daily', 'weekly', 'monthly']
+// Convention backend (schedule.utils.js) : 0 = dimanche ... 6 = samedi (JS Date.getDay()).
+const DAYS_OF_WEEK = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+
+const TIMEZONES = [
+  { value: 'Europe/Paris',      label: 'Europe/Paris (UTC+1/+2)' },
+  { value: 'Europe/Brussels',   label: 'Europe/Brussels (UTC+1/+2)' },
+  { value: 'Europe/Zurich',     label: 'Europe/Zurich (UTC+1/+2)' },
+  { value: 'Europe/Luxembourg', label: 'Europe/Luxembourg (UTC+1/+2)' },
+  { value: 'America/Montreal',  label: 'America/Montréal (UTC-5/-4)' },
+  { value: 'Africa/Casablanca', label: 'Africa/Casablanca (UTC+1)' },
+  { value: 'Africa/Tunis',      label: 'Africa/Tunis (UTC+1)' },
+  { value: 'Africa/Dakar',      label: 'Africa/Dakar (UTC+0)' },
+]
+
+function fmtDateTime(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })
+}
 
 // Tailles impaires jusqu'au plafond du plan (grille N×N, N impair pour qu'un point tombe pile au centre).
 function gridSizeOptions(cap) {
@@ -59,13 +84,26 @@ export default function GeogridConfigPage() {
   const [fitToken, setFitToken] = useState(0)
   const [saving, setSaving] = useState(false)
 
+  // Étape 2 — mots-clés
+  const [keywords, setKeywords] = useState([])
+  const [newKeyword, setNewKeyword] = useState('')
+
+  // Étape 3 — planning
+  const [frequency, setFrequency] = useState('weekly')
+  const [runHour, setRunHour] = useState(4)
+  const [runDayOfWeek, setRunDayOfWeek] = useState(1)
+  const [runDayOfMonth, setRunDayOfMonth] = useState(1)
+  const [timezone, setTimezone] = useState('Europe/Paris')
+  const [nextRunAt, setNextRunAt] = useState(null)
+  const [savingPlanning, setSavingPlanning] = useState(false)
+
   const bid = activeBusiness?.id
   const locId = activeLocation?.id
   const fiche = activeLocation && activeLocation.lat != null && activeLocation.lng != null
     ? { lat: Number(activeLocation.lat), lng: Number(activeLocation.lng) }
     : null
 
-  // Charge quota + config existante
+  // Charge quota + config + mots-clés existants
   useEffect(() => {
     if (!bid || !locId) return
     let cancelled = false
@@ -73,10 +111,12 @@ export default function GeogridConfigPage() {
     Promise.all([
       api.get(`/api/v1/rank-tracking/quota?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/config?business_id=${bid}&location_id=${locId}`),
+      api.get(`/api/v1/rank-tracking/keywords?business_id=${bid}&location_id=${locId}`),
     ])
-      .then(([q, cfg]) => {
+      .then(([q, cfg, kws]) => {
         if (cancelled) return
         setQuota(q)
+        setKeywords(kws)
         if (q.enabled) {
           setShape(cfg.shape || 'square')
           setGridSize(cfg.grid_size || 7)
@@ -85,6 +125,13 @@ export default function GeogridConfigPage() {
           setCenterCustom(custom)
           setCenter(custom ? { lat: Number(cfg.center_lat), lng: Number(cfg.center_lng) } : fiche)
           setFitToken(t => t + 1)
+
+          setFrequency(cfg.frequency || 'weekly')
+          setRunHour(Number.isInteger(cfg.run_hour) ? cfg.run_hour : 4)
+          setRunDayOfWeek(Number.isInteger(cfg.run_day_of_week) ? cfg.run_day_of_week : 1)
+          setRunDayOfMonth(Number.isInteger(cfg.run_day_of_month) ? cfg.run_day_of_month : 1)
+          setTimezone(cfg.timezone || activeBusiness?.timezone || 'Europe/Paris')
+          setNextRunAt(cfg.next_run_at || null)
         }
       })
       .catch(e => { if (!cancelled) setError(e.message) })
@@ -141,6 +188,51 @@ export default function GeogridConfigPage() {
     }
   }
 
+  async function addKeyword(e) {
+    e.preventDefault()
+    const kw = newKeyword.trim()
+    if (!kw) return
+    setError('')
+    try {
+      const created = await api.post(`/api/v1/rank-tracking/keywords?business_id=${bid}`, { location_id: locId, keyword: kw })
+      setKeywords(k => [...k, created])
+      setNewKeyword('')
+      setQuota(q => (q ? { ...q, used: (q.used || 0) + 1 } : q))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function removeKeyword(id) {
+    if (!window.confirm('Supprimer ce mot-clé et tout son historique de scans ?')) return
+    setError('')
+    try {
+      await api.delete(`/api/v1/rank-tracking/keywords/${id}?business_id=${bid}`)
+      setKeywords(k => k.filter(kw => kw.id !== id))
+      setQuota(q => (q ? { ...q, used: Math.max(0, (q.used || 0) - 1) } : q))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function savePlanningAndNext() {
+    setSavingPlanning(true); setError('')
+    try {
+      const updated = await api.put(`/api/v1/rank-tracking/config?business_id=${bid}&location_id=${locId}`, {
+        frequency, run_hour: runHour,
+        run_day_of_week: frequency === 'weekly' ? runDayOfWeek : null,
+        run_day_of_month: frequency === 'monthly' ? runDayOfMonth : null,
+        timezone,
+      })
+      setNextRunAt(updated.next_run_at)
+      setStep(4)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSavingPlanning(false)
+    }
+  }
+
   // ── États de garde ──
   if (!activeBusiness || !activeLocation) {
     return (
@@ -181,6 +273,8 @@ export default function GeogridConfigPage() {
 
   const allowedShapes = quota?.allowed_shapes || ['square']
   const sizeOptions = gridSizeOptions(quota?.max_grid_size || 7)
+  const allowedFrequencies = quota?.allowed_frequencies || ['weekly']
+  const atMaxKeywords = quota?.max_keywords != null && keywords.length >= quota.max_keywords
   const previewPoints = preview?.points || []
   const pointCount = previewPoints.length
   // Rayon du disque réel = distance du point le plus éloigné du centre. Sert au contour de cercle
@@ -280,9 +374,129 @@ export default function GeogridConfigPage() {
           </div>
         )}
 
-        {/* ── Étapes 2-4 — construites dans les sous-sessions suivantes ── */}
-        {step > 1 && (
-          <StepPlaceholder step={step} onBack={() => setStep(step - 1)} />
+        {/* ── Étape 2 — Mots-clés ── */}
+        {step === 2 && (
+          <div className="max-w-2xl space-y-4">
+            <div className="bg-white border border-border rounded-2xl p-5 space-y-4">
+              {keywords.length > 0 ? (
+                <ul className="divide-y divide-border">
+                  {keywords.map(k => (
+                    <li key={k.id} className="flex items-center justify-between py-2.5">
+                      <span className="text-sm text-text-primary">{k.keyword}</span>
+                      <button onClick={() => removeKeyword(k.id)}
+                        className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg text-text-tertiary hover:text-danger hover:bg-red-50 transition-colors"
+                        title="Supprimer ce mot-clé">
+                        <Trash2 size={15} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-text-tertiary">Aucun mot-clé pour l'instant — ajoutez-en au moins un pour continuer.</p>
+              )}
+
+              <form onSubmit={addKeyword} className="flex items-center gap-2 pt-1 border-t border-border">
+                <input
+                  value={newKeyword}
+                  onChange={e => setNewKeyword(e.target.value)}
+                  placeholder="Ajouter un mot-clé (ex : plombier Lyon)"
+                  disabled={atMaxKeywords}
+                  className="flex-1 h-9 px-3 rounded-lg border border-border text-sm text-text-primary bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:bg-gray-50"
+                />
+                <button type="submit" disabled={atMaxKeywords || !newKeyword.trim()}
+                  className="inline-flex items-center gap-1.5 bg-white border border-border text-text-primary text-sm font-medium px-3 h-9 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Plus size={15} /> Ajouter
+                </button>
+              </form>
+
+              {quota?.max_keywords != null && (
+                <p className="text-xs text-text-tertiary">
+                  {keywords.length} / {quota.max_keywords} mots-clés utilisés
+                  {atMaxKeywords && ' — limite de votre plan atteinte'}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-1">
+              <button onClick={() => setStep(1)} className="text-sm text-text-secondary hover:text-accent transition-colors">← Retour</button>
+              <Button onClick={() => setStep(3)} disabled={!keywords.length}>Continuer</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Étape 3 — Planning ── */}
+        {step === 3 && (
+          <div className="max-w-2xl space-y-4">
+            <div className="bg-white border border-border rounded-2xl p-5 grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5">Fréquence</label>
+                <select value={frequency} onChange={e => setFrequency(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                  {FREQUENCY_ORDER.filter(f => allowedFrequencies.includes(f)).map(f => (
+                    <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5 flex items-center gap-1.5">
+                  <Clock size={13} /> Heure de lancement
+                </label>
+                <select value={runHour} onChange={e => setRunHour(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+              </div>
+
+              {frequency === 'weekly' && (
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Jour de la semaine</label>
+                  <select value={runDayOfWeek} onChange={e => setRunDayOfWeek(Number(e.target.value))}
+                    className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    {DAYS_OF_WEEK.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {frequency === 'monthly' && (
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary mb-1.5">Jour du mois</label>
+                  <select value={runDayOfMonth} onChange={e => setRunDayOfMonth(Number(e.target.value))}
+                    className="w-full h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <p className="text-xs text-text-tertiary mt-1">Si le mois est plus court, le dernier jour du mois sera utilisé.</p>
+                </div>
+              )}
+
+              <div className="sm:col-span-2">
+                <Select label="Fuseau horaire" value={timezone} onChange={e => setTimezone(e.target.value)}>
+                  {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+                </Select>
+              </div>
+            </div>
+
+            {nextRunAt && (
+              <p className="text-xs text-text-secondary flex items-center gap-1.5 px-1">
+                <Globe size={13} /> Prochain rapport planifié le {fmtDateTime(nextRunAt)}
+              </p>
+            )}
+
+            <div className="flex justify-between items-center pt-1">
+              <button onClick={() => setStep(2)} className="text-sm text-text-secondary hover:text-accent transition-colors">← Retour</button>
+              <Button onClick={savePlanningAndNext} disabled={savingPlanning}>
+                {savingPlanning ? <Loader2 size={15} className="animate-spin" /> : null}
+                Enregistrer et continuer
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Étape 4 — construite en G8.3 ── */}
+        {step === 4 && (
+          <StepPlaceholder onBack={() => setStep(3)} />
         )}
       </div>
     </AppLayout>
@@ -299,15 +513,13 @@ function ShapeButton({ active, onClick, icon, label }) {
   )
 }
 
-function StepPlaceholder({ step, onBack }) {
-  const labels = { 2: 'Mots-clés', 3: 'Planning', 4: 'Concurrents' }
-  const sessions = { 2: 'G8.2', 3: 'G8.2', 4: 'G8.3' }
+function StepPlaceholder({ onBack }) {
   return (
     <div className="text-center bg-white border border-dashed border-border rounded-2xl p-12">
-      <h3 className="text-sm font-semibold text-text-primary">Étape « {labels[step]} »</h3>
+      <h3 className="text-sm font-semibold text-text-primary">Étape « Concurrents »</h3>
       <p className="text-sm text-text-secondary mt-1.5 max-w-sm mx-auto">
-        Cette étape sera construite dans la session {sessions[step]}. L'Étape 1 (Grille) est déjà opérationnelle
-        et enregistre bien la configuration.
+        Cette étape sera construite dans la session G8.3, avec le récap final et le premier rapport.
+        Les Étapes 1 à 3 sont déjà opérationnelles et enregistrent bien la configuration.
       </p>
       <button onClick={onBack} className="mt-5 text-sm text-accent hover:underline">← Revenir à l'étape précédente</button>
     </div>
