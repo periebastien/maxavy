@@ -316,8 +316,8 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G4 | Frontend — heatmap | ✅ Terminé | `GeogridPage` (`/positionnement`, lazy) + `GeogridMap` (carte Google + pastilles rang colorées + InfoWindow concurrents), gestion mots-clés, gating par plan, scan + polling, métriques. Vérifié avec données réelles (structure/metrics/API OK). Voir détail ci-dessous |
 | G5 | Refonte — modèle & config partagée | ✅ Terminé (2026-07-02) | Migration **additive uniquement** (expand, pas de contract) : 4 nouvelles tables + colonnes + migration de données. Voir détail ci-dessous |
 | G6 | Backend — planning & grille cercle | ✅ Terminé (2026-07-02) | Cutover complet : forme cercle (masque disque), planning `next_run_at` fuseau-aware (Luxon), cron réécrit par runs/configs, retrait des champs legacy du mot-clé. Voir détail ci-dessous |
-| G7 | Backend — concurrents & agrégats | ⬜ À faire | Agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints runs/trend/config |
-| G8 | Frontend — Configuration (wizard) | ⬜ À faire | Section sidebar, wizard 4 étapes, édition, premier rapport |
+| G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
+| G8 | Frontend — Configuration (wizard) | ⬜ À faire | Section sidebar **anticipée** (2026-07-02, nav uniquement), reste : wizard 4 étapes, édition, premier rapport |
 | G9 | Frontend — Suivi | ⬜ À faire | Vue globale + par mot-clé, tableaux triables, courbes Recharts |
 | G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
@@ -452,7 +452,36 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 
 **Vérifs** : `node --check` sur les 8 fichiers touchés/créés OK, smoke-test de chargement des modules OK, 2 migrations appliquées, backend redémarré proprement (un seul listener, aucune erreur), page `/positionnement` identique à l'état pré-G6 en preview (mot-clé, quota, métriques, grille). Données de test entièrement nettoyées, config restaurée à l'identique.
 
-**Prochaine session : G7 — backend concurrents & agrégats** (liste de concurrents, agrégats fiche+concurrents par scan — top 3/10/20 —, `MAX_COMPETITORS` 5→20, endpoints `runs`/`trend`/`config`).
+**Prochaine session initialement : G7 — backend concurrents & agrégats.** Faite dans la foulée (2026-07-02) — voir détail ci-dessous. Entre G6 et G7, une petite parenthèse : section sidebar « POSITIONNEMENT » anticipée de G8 (nav uniquement — Configuration/Suivi/Concurrents, route `/positionnement` renommée `/positionnement/configuration`) pour donner un premier retour visuel après deux sessions 100% backend.
+
+### Détail session G7 — Backend concurrents & agrégats (2026-07-02)
+
+**Nouveau fichier `competitor.service.js`** : CRUD concurrents (`list`/`create`/`remove`) scopé par `config_id` (donc par localisation), quota `max_competitors` du plan (Starter 3 / Pro 5 / Agence 10, testé en direct : 3ᵉ accepté, 4ᵉ rejeté 403). Agrégation par scan (`aggregateCompetitorOnPoints`) : même convention que l'ATRP de la fiche — position moyenne sur **tous** les points du scan, `NOT_RANKED=21` imputé partout où le `place_id` du concurrent est absent du JSONB `geogrid_points.competitors` (« hors profondeur mesurée », pas position réelle — bornée à `MAX_COMPETITORS`). `computeAndStoreForScan` (delete-then-insert, idempotent, pas d'upsert Sequelize sur contrainte composite) appelée automatiquement par `finalizeScan` pour les concurrents actifs de la config, et par `recompute()` (nouvel endpoint `POST /competitors/recompute`) pour rattraper rétroactivement l'historique après l'ajout d'un concurrent — **testé en direct** : 3 concurrents fictifs ajoutés puis recalculés sur le scan existant → `avg_position: 21.00`, `appearances: 0` partout (cohérent : place_id inventés, absents des résultats réels).
+
+**`MAX_COMPETITORS` 5 → 20** (`scan.service.js`) : la profondeur DataForSEO récupérée était déjà `depth:20`, donc pur changement de stockage, **coût data nul**.
+
+**`finalizeScan` enrichi** : calcule et fige désormais `points_top3`/`points_top10`/`points_top20` de la fiche (comme `arp`/`atrp`/`solv`), puis déclenche l'agrégation des concurrents actifs de la config du mot-clé. **Backfill opportuniste** ajouté dans `recompute()` : les scans antérieurs à G7 (colonnes ajoutées en G5, jamais calculées avant ce commit) avaient `points_top3/10/20 = null` de façon permanente — `recompute()` les comble au passage puisqu'il charge déjà les points. **Testé en direct** sur le scan historique (G1-G4) : `points_ranked:8` → `points_top3:1`, `points_top10:1`, `points_top20:8` (cohérent : top20 = tous les points classés, par définition de la profondeur de recherche).
+
+**Quota par localisation** (décision actée §2, différée depuis G5/G6) : `assertQuotaAvailable`/`getQuotaStatus` (mots-clés) et le quota concurrents (naturellement scopé par `config_id`) comptent désormais **par localisation**, pas par entreprise. Ajustement minimal côté front (`GeogridPage.jsx`, 1 ligne) : `GET /quota` passe maintenant `location_id`.
+
+**Endpoints ajoutés** (`rank-tracking.routes.js`) :
+- `GET/PUT /config` — lecture (auto-provisioning) et **édition stricte** de la config (forme/taille/espacement/fréquence/heure/jour/centre/fuseau) : rejette (400/403) plutôt que de plafonner silencieusement, à la différence de l'ancien `create()` de mot-clé — cohérent avec le fait que c'est un endpoit d'édition explicite. Fuseau validé via Luxon (`isValidTimezone`, nouvelle fonction `schedule.utils.js`). Recalcule `next_run_at` à chaque sauvegarde.
+- `GET/POST /competitors`, `DELETE /competitors/:id`, `POST /competitors/recompute`.
+- `POST /runs` (rapport manuel — scanne **tous** les mots-clés actifs de la localisation, contrairement à l'ancien `POST /scans` mono-mot-clé **toujours exposé et inchangé** pour l'UI actuelle), `GET /runs`, `GET /runs/:id`.
+- `GET /trend` — série brute des scans terminés d'un mot-clé (pas d'agrégation jour/semaine/mois ici, ce sera la couche de visualisation en G9).
+
+**Refactor `scan.service.js`** : `launchRunForConfig` (cron) séparé en `launchRun(config, trigger, scheduledFor)` (cœur partagé, sans effet de bord sur la planification) + `launchRunForConfig` (avance `next_run_at` puis délègue) + `createRun` (endpoint manuel, ne touche jamais `next_run_at`).
+
+**Tests réels effectués** (contre la vraie base, backend redémarré, données nettoyées après coup) :
+1. `GET/PUT /config` : mise à jour valide (forme cercle + heure 6h) → `next_run_at` recalculé correctement (05:00 UTC = 6h Casablanca) ; grille 13 (plafond Starter 7) → 403 ; fréquence `daily` (non incluse Starter) → 403 ; fuseau invalide → 400. Config restaurée à l'identique après coup (`next_run_at` exactement égal à sa valeur d'avant test).
+2. Concurrents : création ×3 → 201, doublon → 409, quota atteint (4ᵉ) → 403, liste correcte.
+3. `POST /competitors/recompute` : backfill réel vérifié en base (agrégats concurrents + `points_top3/10/20` fiche).
+4. `POST /runs` (grille temporairement réduite à 3×3 pour coût minimal) : run créé `trigger:'manual'`, `scheduled_for:null`, scan lié par `run_id`, **`next_run_at` de la config non modifié** (confirmé en base, valeur identique avant/après — la planification n'est pas perturbée par un rapport manuel).
+5. `GET /runs` (liste vide, cohérent), `GET /trend` (historique correct avec les nouveaux champs).
+
+**Vérifs** : `node --check` sur tous les fichiers touchés/créés OK, smoke-test de chargement des modules OK, migration appliquée (index unique `geogrid_scan_competitors(scan_id, place_id)`), backend redémarré proprement à deux reprises (dont une pour charger le correctif du backfill), page `/positionnement/configuration` identique à l'état pré-G7 en preview. Toutes les données de test (concurrents fictifs, run manuel, scan/points associés) supprimées, config restaurée à l'identique (`grid_size`, `shape`, `run_hour`, `next_run_at` tous vérifiés égaux à leur valeur d'avant session).
+
+**Prochaine session : G8 — Frontend Configuration (wizard)** (le gros morceau frontend : assistant 4 étapes — grille déplaçable + forme, mots-clés, planning, concurrents —, édition pré-remplie, bouton « premier rapport maintenant ». La nav est déjà en place, il reste à construire les pages).
 
 ---
 

@@ -7,15 +7,19 @@ const GeogridConfig = require('../../models/GeogridConfig')
 const GeogridRun = require('../../models/GeogridRun')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
+const GeogridCompetitor = require('../../models/GeogridCompetitor')
 const { buildGrid } = require('./geogrid.utils')
 const { computeNextRunAt } = require('./schedule.utils')
 const provider = require('./providers')
 const { ensureAccess, getQuota, ensureConfigForLocation } = require('./rank-tracking.service')
+const competitorService = require('./competitor.service')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const RANK_PROVIDER_NAME = process.env.RANK_PROVIDER || 'dataforseo'
 const NOT_RANKED = 21 // valeur conventionnelle pour ATRP quand la fiche est absente du Top 20
-const MAX_COMPETITORS = 5
+// Profondeur DataForSEO déjà récupérée = 20 (depth:20) → passer de 5 à 20 ici est un pur changement de
+// stockage, coût data nul (G7 — cf. GEOGRID_REFONTE_FR.md §16). Permet l'agrégation par concurrent.
+const MAX_COMPETITORS = 20
 
 function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length }
 function round2(n) { return Math.round(n * 100) / 100 }
@@ -196,7 +200,17 @@ async function finalizeScan(scan) {
     arp,
     atrp,
     solv,
+    points_top3: ranked.filter(p => p.rank <= 3).length,
+    points_top10: ranked.filter(p => p.rank <= 10).length,
+    points_top20: ranked.filter(p => p.rank <= 20).length,
   })
+
+  // Agrégats concurrents (G7) : concurrents actifs de la config du mot-clé, au moment du finalize.
+  const keyword = await GeogridKeyword.findByPk(scan.keyword_id)
+  if (keyword?.config_id) {
+    const competitors = await GeogridCompetitor.findAll({ where: { config_id: keyword.config_id, active: true } })
+    await competitorService.computeAndStoreForScan(scan, points, competitors)
+  }
 }
 
 async function listScans(businessId, userId, keywordId) {
@@ -233,24 +247,20 @@ async function findDueConfigs(limit) {
   })
 }
 
-// Lance un rapport (run) pour une config due : avance next_run_at IMMÉDIATEMENT (avant tout scan, même
-// principe anti-boucle que last_scanned_at en G3 — un échec ne redéclenche pas le run à chaque tick),
-// puis scanne tous ses mots-clés actifs. Un échec de lancement sur UN mot-clé n'empêche pas les autres
-// (Promise.allSettled) et marque le run has_failures sans le faire échouer entièrement.
-async function launchRunForConfig(config) {
-  const business = await Business.findByPk(config.business_id)
-  const timezone = config.timezone || business?.timezone || 'Europe/Paris'
-  const anchor = config.next_run_at || new Date()
-  await config.update({ next_run_at: computeNextRunAt(config, timezone, anchor) })
-
+// Cœur du lancement d'un rapport, sans contrôle d'accès/quota ni avancement de planning (assurés par
+// l'appelant) — partagé entre le cron (trigger 'scheduled') et l'endpoint manuel (trigger 'manual', qui
+// ne touche jamais next_run_at). Scanne tous les mots-clés actifs de la config. Un échec de lancement
+// sur UN mot-clé n'empêche pas les autres (Promise.allSettled) et marque has_failures sans faire
+// échouer le run entier.
+async function launchRun(config, trigger, scheduledFor) {
   const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
   const run = await GeogridRun.create({
     business_id: config.business_id,
     location_id: config.location_id,
     config_id: config.id,
-    trigger: 'scheduled',
+    trigger,
     status: keywords.length ? 'running' : 'done',
-    scheduled_for: anchor,
+    scheduled_for: scheduledFor || null,
     started_at: new Date(),
     finished_at: keywords.length ? null : new Date(),
     keywords_total: keywords.length,
@@ -261,6 +271,60 @@ async function launchRunForConfig(config) {
   const results = await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id })))
   if (results.some(r => r.status === 'rejected')) await run.update({ has_failures: true })
   return run
+}
+
+// Lance un rapport (run) pour une config due (appelé par le cron) : avance next_run_at IMMÉDIATEMENT
+// (avant tout scan, même principe anti-boucle que last_scanned_at en G3 — un échec ne redéclenche pas
+// le run à chaque tick), puis délègue au cœur.
+async function launchRunForConfig(config) {
+  const business = await Business.findByPk(config.business_id)
+  const timezone = config.timezone || business?.timezone || 'Europe/Paris'
+  const anchor = config.next_run_at || new Date()
+  await config.update({ next_run_at: computeNextRunAt(config, timezone, anchor) })
+  return launchRun(config, 'scheduled', anchor)
+}
+
+// Endpoint manuel « lancer un rapport maintenant » (G7 — scanne tous les mots-clés actifs de la
+// localisation, contrairement à l'ancien createScan qui ne visait qu'un seul mot-clé, toujours exposé
+// tel quel pour l'UI actuelle). Ne touche PAS à la planification.
+async function createRun(businessId, userId, locationId) {
+  const business = await ensureAccess(businessId, userId)
+  const quota = await getQuota(business)
+  if (!quota.enabled) throw { status: 403, message: "Le suivi de positionnement n'est pas inclus dans votre plan" }
+  const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
+  if (!location) throw { status: 404, message: 'Localisation introuvable' }
+  const config = await ensureConfigForLocation(location, business)
+  return launchRun(config, 'manual')
+}
+
+async function listRuns(businessId, userId, locationId) {
+  await ensureAccess(businessId, userId)
+  const where = { business_id: businessId }
+  if (locationId) where.location_id = locationId
+  return GeogridRun.findAll({ where, order: [['created_at', 'DESC']], limit: 50 })
+}
+
+async function getRun(runId, businessId, userId) {
+  await ensureAccess(businessId, userId)
+  if (!UUID_RE.test(runId)) throw { status: 404, message: 'Rapport introuvable' }
+  const run = await GeogridRun.findOne({ where: { id: runId, business_id: businessId } })
+  if (!run) throw { status: 404, message: 'Rapport introuvable' }
+  const scans = await GeogridScan.findAll({ where: { run_id: run.id }, order: [['created_at', 'ASC']] })
+  return { run, scans }
+}
+
+// Série temporelle brute d'un mot-clé (scans terminés, triés par date) — alimente les courbes G9.
+// Pas d'agrégation jour/semaine/mois ici : c'est la couche de visualisation (frontend) qui bucketise.
+async function getTrend(businessId, userId, keywordId) {
+  await ensureAccess(businessId, userId)
+  if (!UUID_RE.test(keywordId || '')) throw { status: 404, message: 'Mot-clé introuvable' }
+  const keyword = await GeogridKeyword.findOne({ where: { id: keywordId, business_id: businessId } })
+  if (!keyword) throw { status: 404, message: 'Mot-clé introuvable' }
+  return GeogridScan.findAll({
+    where: { keyword_id: keywordId, status: 'done' },
+    attributes: ['id', 'run_id', 'scanned_at', 'arp', 'atrp', 'solv', 'points_top3', 'points_top10', 'points_top20', 'points_total'],
+    order: [['scanned_at', 'ASC']],
+  })
 }
 
 // Lance les rapports des configs dues, en parallèle par paquets de `concurrency`.
@@ -343,5 +407,6 @@ async function failStuckScans(timeoutMinutes) {
 
 module.exports = {
   createScan, refreshScan, listScans, getScan,
+  createRun, listRuns, getRun, getTrend,
   runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans,
 }

@@ -43,7 +43,7 @@ export default function GeogridPage() {
     let cancelled = false
     setLoading(true); setError(''); setDetail(null); setSelectedId(null)
     Promise.all([
-      api.get(`/api/v1/rank-tracking/quota?business_id=${bid}`),
+      api.get(`/api/v1/rank-tracking/quota?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/keywords?business_id=${bid}&location_id=${locId}`),
     ])
       .then(([q, kws]) => {

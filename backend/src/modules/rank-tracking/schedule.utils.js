@@ -44,4 +44,8 @@ function computeNextRunAt(config, timezone, fromDate = new Date()) {
   return next.toUTC().toJSDate()
 }
 
-module.exports = { computeNextRunAt }
+function isValidTimezone(tz) {
+  return typeof tz === 'string' && tz.length > 0 && DateTime.local().setZone(tz).isValid
+}
+
+module.exports = { computeNextRunAt, isValidTimezone }

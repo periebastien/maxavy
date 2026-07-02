@@ -6,7 +6,7 @@ const Location = require('../../models/Location')
 const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
 const { buildGrid } = require('./geogrid.utils')
-const { computeNextRunAt } = require('./schedule.utils')
+const { computeNextRunAt, isValidTimezone } = require('./schedule.utils')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const DEFAULT_GRID_SIZE = 7
@@ -36,9 +36,11 @@ async function getQuota(business) {
   return quota?.enabled ? quota : { enabled: false }
 }
 
-async function assertQuotaAvailable(businessId, quota, excludeId) {
+// Quota mots-clés : par LOCALISATION (décision produit, GEOGRID_REFONTE_FR.md §2 décision 4 — chaque
+// fiche a son propre compteur, à distinguer du quota "nombre de localisations" du plan lui-même).
+async function assertQuotaAvailable(businessId, locationId, quota, excludeId) {
   if (!quota.enabled) throw { status: 403, message: "Le suivi de positionnement n'est pas inclus dans votre plan" }
-  const where = { business_id: businessId, active: true }
+  const where = { business_id: businessId, location_id: locationId, active: true }
   if (excludeId) where.id = { [Op.ne]: excludeId }
   const used = await GeogridKeyword.count({ where })
   if (used >= quota.max_keywords) {
@@ -96,7 +98,7 @@ async function create(businessId, userId, { location_id, keyword }) {
   if (!keyword || !keyword.trim()) throw { status: 400, message: 'Mot-clé requis' }
 
   const quota = await getQuota(business)
-  await assertQuotaAvailable(businessId, quota)
+  await assertQuotaAvailable(businessId, location_id, quota)
   const config = await ensureConfigForLocation(location, business)
 
   try {
@@ -138,7 +140,7 @@ async function update(id, businessId, userId, { keyword, active }) {
     kw.keyword = keyword.trim()
   }
   if (active !== undefined) {
-    if (active && !kw.active) await assertQuotaAvailable(businessId, quota, kw.id)
+    if (active && !kw.active) await assertQuotaAvailable(businessId, kw.location_id, quota, kw.id)
     kw.active = active
   }
 
@@ -156,11 +158,16 @@ async function remove(id, businessId, userId) {
   await kw.destroy()
 }
 
-async function getQuotaStatus(businessId, userId) {
+// locationId optionnel pour compat ascendante (front pas encore mis à jour partout) : sans lui, le
+// compteur reste indicatif au niveau entreprise, mais l'application du quota (assertQuotaAvailable,
+// toujours appelée avec un location_id réel à la création) reste, elle, strictement par localisation.
+async function getQuotaStatus(businessId, userId, locationId) {
   const business = await ensureAccess(businessId, userId)
   const quota = await getQuota(business)
   if (!quota.enabled) return { enabled: false, max_keywords: 0, used: 0 }
-  const used = await GeogridKeyword.count({ where: { business_id: businessId, active: true } })
+  const where = { business_id: businessId, active: true }
+  if (locationId) where.location_id = locationId
+  const used = await GeogridKeyword.count({ where })
   return { ...quota, used }
 }
 
@@ -184,4 +191,93 @@ async function previewGrid(businessId, userId, { location_id, grid_size, grid_sp
   }
 }
 
-module.exports = { create, list, getOne, update, remove, getQuotaStatus, previewGrid, getQuota, ensureAccess, ensureConfigForLocation }
+async function getConfig(businessId, userId, locationId) {
+  const business = await ensureAccess(businessId, userId)
+  const location = await ensureLocation(locationId, businessId)
+  return ensureConfigForLocation(location, business)
+}
+
+// Validation STRICTE (rejette, ne coerce pas silencieusement) — à la différence de previewGrid/l'ancien
+// create() de mot-clé : ici l'utilisateur édite explicitement sa configuration (G7, endpoint d'écriture
+// exposé pour le futur wizard G8), donc une valeur hors plan doit être signalée, pas juste plafonnée.
+function normalizeShape(requested, quota) {
+  const allowed = quota.allowed_shapes || ['square']
+  const shape = requested || allowed[0] || 'square'
+  if (!allowed.includes(shape)) throw { status: 403, message: 'Cette forme de grille n\'est pas incluse dans votre plan' }
+  return shape
+}
+
+function normalizeGridSizeStrict(requested, quota) {
+  const cap = quota.max_grid_size || quota.grid_size || DEFAULT_GRID_SIZE
+  const n = Number(requested)
+  if (!Number.isInteger(n) || n < 3 || n % 2 === 0) throw { status: 400, message: 'La taille de la grille doit être un nombre impair ≥ 3' }
+  if (n > cap) throw { status: 403, message: `Taille de grille maximale pour votre plan : ${cap}` }
+  return n
+}
+
+function normalizeFrequencyStrict(requested, quota) {
+  if (!['monthly', 'weekly', 'daily'].includes(requested)) throw { status: 400, message: 'Fréquence invalide' }
+  const allowed = quota.allowed_frequencies || (quota.frequency ? [quota.frequency] : ['weekly'])
+  if (!allowed.includes(requested)) throw { status: 403, message: "Cette fréquence n'est pas incluse dans votre plan" }
+  return requested
+}
+
+async function updateConfig(businessId, userId, locationId, body) {
+  const business = await ensureAccess(businessId, userId)
+  const location = await ensureLocation(locationId, businessId)
+  const config = await ensureConfigForLocation(location, business)
+  const quota = await getQuota(business)
+  if (!quota.enabled) throw { status: 403, message: "Le suivi de positionnement n'est pas inclus dans votre plan" }
+
+  const {
+    shape, grid_size, grid_spacing_m, frequency, run_hour, run_day_of_week, run_day_of_month,
+    center_lat, center_lng, timezone, active,
+  } = body
+
+  if (shape !== undefined) config.shape = normalizeShape(shape, quota)
+  if (grid_size !== undefined) config.grid_size = normalizeGridSizeStrict(grid_size, quota)
+  if (grid_spacing_m !== undefined) {
+    const n = Number(grid_spacing_m)
+    if (!Number.isInteger(n) || n < 50) throw { status: 400, message: 'Espacement invalide (mètres, ≥ 50)' }
+    config.grid_spacing_m = n
+  }
+  if (frequency !== undefined) config.frequency = normalizeFrequencyStrict(frequency, quota)
+  if (run_hour !== undefined) {
+    const n = Number(run_hour)
+    if (!Number.isInteger(n) || n < 0 || n > 23) throw { status: 400, message: 'Heure invalide (0-23)' }
+    config.run_hour = n
+  }
+  if (run_day_of_week !== undefined) {
+    const n = run_day_of_week === null ? null : Number(run_day_of_week)
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 6)) throw { status: 400, message: 'Jour de semaine invalide (0-6)' }
+    config.run_day_of_week = n
+  }
+  if (run_day_of_month !== undefined) {
+    const n = run_day_of_month === null ? null : Number(run_day_of_month)
+    if (n !== null && (!Number.isInteger(n) || n < 1 || n > 31)) throw { status: 400, message: 'Jour du mois invalide (1-31)' }
+    config.run_day_of_month = n
+  }
+  if (center_lat !== undefined) {
+    if (center_lat !== null && !Number.isFinite(Number(center_lat))) throw { status: 400, message: 'Latitude invalide' }
+    config.center_lat = center_lat === null ? null : Number(center_lat)
+  }
+  if (center_lng !== undefined) {
+    if (center_lng !== null && !Number.isFinite(Number(center_lng))) throw { status: 400, message: 'Longitude invalide' }
+    config.center_lng = center_lng === null ? null : Number(center_lng)
+  }
+  if (timezone !== undefined) {
+    if (!isValidTimezone(timezone)) throw { status: 400, message: 'Fuseau horaire invalide' }
+    config.timezone = timezone
+  }
+  if (active !== undefined) config.active = !!active
+
+  const resolvedTimezone = config.timezone || business.timezone || 'Europe/Paris'
+  config.next_run_at = computeNextRunAt(config, resolvedTimezone)
+  await config.save()
+  return config
+}
+
+module.exports = {
+  create, list, getOne, update, remove, getQuotaStatus, previewGrid, getQuota, ensureAccess, ensureConfigForLocation,
+  getConfig, updateConfig,
+}
