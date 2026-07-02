@@ -8,6 +8,7 @@ const Plan = sequelize.define('Plan', {
   price:                 { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   monthly_credits:       { type: DataTypes.INTEGER, defaultValue: 0 },
   features:              { type: DataTypes.JSONB, defaultValue: [] },
+  module_quotas:         { type: DataTypes.JSONB, defaultValue: {} }, // config machine-readable par module_key, ex: { rank_tracking: { enabled, max_keywords, grid_size, grid_spacing_m, frequency } }
   stripe_product_id:     { type: DataTypes.STRING },
   stripe_price_id:       { type: DataTypes.STRING },
   stripe_price_id_yearly: { type: DataTypes.STRING },

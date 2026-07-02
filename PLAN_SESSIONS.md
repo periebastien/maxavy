@@ -90,8 +90,40 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 | 35 | Config OVH | PM2, Nginx reverse proxy, variables d'env prod |
 | 36 | Déploiement | Build prod, mise en ligne, SSL Let's Encrypt, tests finaux |
 
+## PHASE 11 — SUIVI DE POSITIONNEMENT (GEOGRID) — *post-MVP*
+
+> Heatmap de classement local Google Maps par grille GPS. Spec socle : `GEOGRID_DESIGN_FR.md` + cahier §9.5.
+> **Refonte UX + fonctionnelle (wizard + suivi + concurrents + rapport email)** : cahier des charges dédié **`GEOGRID_REFONTE_FR.md`**.
+> Décisions actées : source **DataForSEO** (pas de proxys côté nous), **gating par plan** (Gratuit exclu ; plafonds **éditables en Super Admin**), périmètre **complet** (grille config wizard + heatmap + multi mots-clés + concurrents + timeline + rapport email).
+
+**Socle livré (G1→G4)** — grille, provider, cron, heatmap, métriques historisées, gating :
+
+| # | Session | Contenu |
+|---|---------|---------|
+| G1 | Backend — schéma & grille | ✅ Fait (2026-07-01) — voir `PROGRESS.md` Phase 11 |
+| G2 | Backend — provider & scan | ✅ Fait (2026-07-01) — testé avec un vrai scan DataForSEO, voir `PROGRESS.md` Phase 11 |
+| G3 | Backend — cron & poll | ✅ Fait (2026-07-01) — boucle 90s scalable, testée cron réel de bout en bout, voir `PROGRESS.md` Phase 11 |
+| G4 | Frontend — heatmap | ✅ Fait (2026-07-01) — `GeogridPage` + `GeogridMap`, gating/mots-clés/scan+polling/métriques. Carte non vérifiable en preview headless (rendu OK en vrai navigateur). Voir `PROGRESS.md` Phase 11 |
+
+**Refonte « Positionnement » (G5→G12)** — détail complet dans `GEOGRID_REFONTE_FR.md` :
+
+| # | Session | Contenu |
+|---|---------|---------|
+| G5 | Refonte modèle & config partagée | Nouvelles tables (`geogrid_configs`, `geogrid_competitors`, `geogrid_runs`, `geogrid_scan_competitors`), allègement `geogrid_keywords`, `run_id`/top3-10-20 sur scans, profondeur points ~20, migration de données, quotas enrichis. |
+| G6 | Backend — planning & grille cercle | Forme **cercle** (masque disque), `next_run_at` + enum `monthly`, refonte cron par **runs**, fuseau par localisation, `/grid-preview` étendu (forme + centre). |
+| G7 | Backend — concurrents & agrégats | Liste de concurrents, agrégats par scan (position moyenne + top 3/10/20 pour la fiche **et** chaque concurrent), endpoints `runs` / `trend` / `config`. |
+| G8 | Frontend — Configuration (wizard) | Section sidebar « POSITIONNEMENT », assistant 4 étapes (grille / mots-clés / planning / concurrents), édition pré-remplie, « premier rapport maintenant ». |
+| G9 | Frontend — Suivi | Vue globale + vue par mot-clé (lecture seule), tableaux triables (fiche + concurrents), heatmap réutilisée, courbes **Recharts** (période + jour/semaine/mois + moyenne/meilleure). |
+| G10 | Frontend — Concurrents | Page de comparaison vs concurrents (tableau + courbes de comparaison), sélection depuis concurrents détectés. |
+| G11 | Rapport email (v1) | Config email (destinataires, cadence bornée par plan), génération résumé chiffré + lien, envoi à la fin d'un run. |
+| G12 | Super Admin — quotas `rank_tracking` | Édition des plafonds par plan (mots-clés, dimension, formes, fréquences, concurrents) via `plans.module_quotas` — sans redéploiement (cf. cahier §10). |
+
+> *v2 ultérieure* : rapport **PDF** avec courbe (SVG généré côté serveur).
+
 ---
 
 ## Résumé
 - **36 sessions** pour le MVP complet
-- **Ensuite** : Module "Suivi des avis de la concurrence" (priorité 1 post-MVP)
+- **Ensuite (post-MVP)** :
+  - Module « Suivi des avis de la concurrence » (priorité 1)
+  - Module « Suivi de positionnement (geogrid / heatmap) » — socle **G1→G4** livré, refonte **G5→G12** (Phase 11 ci-dessus ; `GEOGRID_REFONTE_FR.md` + `GEOGRID_DESIGN_FR.md` + cahier §9.5)

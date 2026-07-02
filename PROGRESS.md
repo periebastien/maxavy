@@ -1,5 +1,5 @@
 # PROGRESS — Locagain MVP
-> Dernière mise à jour : 2026-07-01 (responsive admin)
+> Dernière mise à jour : 2026-07-01 (responsive admin + cadrage module geogrid §9.5)
 > Backend : `node src/app.js` depuis `backend/` → http://localhost:3000
 > Frontend : `npm run dev` depuis `frontend/` → http://localhost:5173
 
@@ -303,6 +303,103 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | 35 | Config OVH | ⬜ À faire | PM2 + Nginx reverse proxy |
 | 36 | Déploiement | ⬜ À faire | Build prod, SSL Let's Encrypt, ns3181892.ip-146-59-148.eu |
 
+## PHASE 11 — SUIVI DE POSITIONNEMENT (GEOGRID) *(post-MVP, planifié)*
+
+> 📐 Spec technique complète : **`GEOGRID_DESIGN_FR.md`** — cahier des charges §9.5.
+> Module de heatmap de classement local Google Maps. **Décisions actées (2026-07-01)** : source = **DataForSEO** (API SERP géolocalisée, provider abstrait — pas de proxys à gérer côté nous) ; facturation = **gating par plan** (Gratuit exclu, Starter bridé à 5 mots-clés, Pro/Agence à ajuster) ; périmètre = **complet** (grille + heatmap + multi mots-clés + historique/timeline). Ancrage déjà en base (`locations.lat/lng` + `google_place_id`).
+
+| # | Session | Statut | Notes |
+|---|---------|--------|-------|
+| G1 | Backend — schéma & grille | ✅ Terminé | Migrations `geogrid_keywords`/`geogrid_scans`/`geogrid_points` + `plans.module_quotas`, modèles, `buildGrid()`, module `rank-tracking/` (CRUD mots-clés + gating quota par plan). Voir détail ci-dessous |
+| G2 | Backend — provider & scan | ✅ Terminé | `providers/` (interface + `dataforseo.provider`), `scan.service.js` (création + polling + finalisation), endpoints scans, calcul ARP/ATRP/SoLV. Testé avec un vrai scan DataForSEO (25 points, données réelles). Voir détail ci-dessous |
+| G3 | Backend — cron & poll | ✅ Terminé | `jobs/scan-geogrid.js` (boucle 90s : timeout + poll + lancement des dus), scalabilité (lot/concurrence/pool bornés), paramètres `.env`. Testé cron réel de bout en bout (scan lancé + terminé en autonomie). Voir détail ci-dessous |
+| G4 | Frontend — heatmap | ✅ Terminé | `GeogridPage` (`/positionnement`, lazy) + `GeogridMap` (carte Google + pastilles rang colorées + InfoWindow concurrents), gestion mots-clés, gating par plan, scan + polling, métriques. Vérifié avec données réelles (structure/metrics/API OK). Voir détail ci-dessous |
+| G5 | Frontend — timeline & polish | ⬜ À faire | Courbes ARP/ATRP/SoLV, scan à la demande (Live), verrou par plan, états vides/loaders |
+
+> **Dépendances front à ajouter** au dev : lib carte (Google Maps déjà chargé via `@googlemaps/js-api-loader` — sinon Leaflet) + lib chart (aucune présente).
+> **`.env` backend** : `RANK_PROVIDER`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD` déjà renseignés (2026-07-01), identifiants validés contre l'API DataForSEO (solde ~0,69 $).
+
+### Détail session G1 — Backend schéma & grille (2026-07-01)
+
+**Migrations 25-28** : `geogrid_keywords` (business_id, location_id, keyword, grid_size, grid_spacing_m, frequency, active — unique `location_id+keyword`), `geogrid_scans` (colonnes métriques ARP/ATRP/SoLV + statut pending/running/done/failed, prêt pour G2), `geogrid_points` (row/col/quadrant/lat/lng/rank/competitors JSONB, prêt pour G2 — **pas de colonne `updated_at`**, `updatedAt: false` sur le modèle, leçon du bug `Review`), et `plans.module_quotas` (nouvelle colonne JSONB — voir décision ci-dessous).
+
+**Décision de conception — `plans.module_quotas` plutôt que `plans.features`** : `plans.features` est un tableau de strings (affichage marketing sur `/pricing`, consommé tel quel par `PricingPage.jsx`) — pas exploitable pour des quotas machine-readable. Ajout d'une colonne dédiée `module_quotas` (JSONB, clé `module_key` comme `business_modules`) : `{ rank_tracking: { enabled, max_keywords, grid_size, grid_spacing_m, frequency } }`. Additive, ne touche pas à l'existant. Seedé par la migration : **Gratuit** = `{}` (absent → désactivé), **Starter** = 5 mots-clés/7×7/hebdo, **Pro** = 15/9×9/hebdo, **Agence** = 50/13×13/hebdo (Pro/Agence indicatifs, à ajuster).
+
+**Module `modules/rank-tracking/`** :
+- `geogrid.utils.js` — `buildGrid(centerLat, centerLng, gridSize, spacingM)` : grille N×N (mètres→degrés, longitude corrigée par `cos(latitude)`), quadrants NW/NE/SW/SE/C, rejette les tailles paires. Vérifié en isolation (7×7 → 49 points, centre exact, répartition quadrants cohérente).
+- `rank-tracking.service.js` — isolation `assertAccess` (pattern tags/reviews), `getQuota(business)` lit `plan.module_quotas.rank_tracking`, `assertQuotaAvailable` compte les mots-clés actifs. `grid_size`/`frequency` **cappés silencieusement** au plafond du plan (clamp, pas de 400) ; `daily` rejeté (403) si le plan n'inclut que `weekly`.
+- Endpoints (`/api/v1/rank-tracking`, montés dans `app.js`) : `GET /quota`, `GET /grid-preview`, `POST/GET /keywords`, `PATCH/DELETE /keywords/:id`.
+- **Scope volontairement limité** : pas de vérification `business_modules` (override hors-plan) — table existante mais sans modèle Sequelize ni middleware dans le projet ; gating **plan uniquement** pour G1. Créer `BusinessModule.js` + middleware `checkModule` reste à faire séparément si un besoin de bêta-test hors-plan se présente.
+
+**Tests réels contre PostgreSQL** (backend redémarré, business de test `Atlasimmobilier` — plan basculé temporairement Starter puis restauré `null`) :
+- Sans plan : `GET /quota` → `{enabled:false}`, `POST /keywords` → 403.
+- Plan Starter : 5 créations → 201, 6ᵉ → 403 (limite), doublon même localisation → 409, `PATCH grid_size:13` → clampé à 7, `PATCH frequency:daily` → 403, `DELETE` → 204, `grid-preview` 7×7/500m → 49 points centrés sur la fiche.
+- Isolation : sans token → 401, `business_id` inexistant → 404.
+- Données de test nettoyées, `plan_id` de l'entreprise restauré à `null` après coup.
+
+**Vérifs** : `node --check` sur les 13 fichiers créés/modifiés OK, migrations appliquées, backend redémarré (`PostgreSQL connecté` + crons OK).
+
+### Détail session G2 — Provider DataForSEO & scan (2026-07-01)
+
+**Recherche préalable contre l'API réelle** (pas de code écrit à l'aveugle sur une doc tierce) : appel `live/advanced` révèle que **Live n'accepte qu'une seule tâche par appel** (`"You can set only one task at a time"`) — invalide l'idée d'un scan grille synchrone en un seul appel. Confirmé le flux correct : `task_post` (jusqu'à 100 tâches/appel, queue **Standard**, ~0,0006 $/tâche) → `tasks_ready` (corrélation par `tag`) → `task_get/advanced/{id}` (résultats : `place_id`, `rank_absolute`, `rating.value`, `rating.votes_count`). Un scan de grille (à la demande ou cron) utilise donc **toujours** la queue asynchrone — la distinction Live/Standard du design doc portera sur un futur « check rapide 1 point », pas sur le geogrid complet.
+
+**Migrations 29-30** : `geogrid_points.provider_task_id` + `fetched_at` (`fetched_at IS NULL` = pas encore résolu, distinct de `rank IS NULL` = résolu mais absent du Top 20) ; **fix `geogrid_scans.credits_used`** INTEGER → DECIMAL(10,4) — bug attrapé en test réel (25 tâches × 0,0006 $ = 0,015, rejeté par Postgres en colonne INTEGER). Les 25 tâches déjà soumises à DataForSEO (payées) ont été récupérées après coup plutôt que perdues/resoumises.
+
+**`providers/`** : interface commune `submitTasks/getReadyTaskIds/getTaskResult`, implémentation `dataforseo.provider.js` (auth Basic, chunking à 100 tâches, timeout 20s), sélecteur `index.js` piloté par `RANK_PROVIDER`.
+
+**`scan.service.js`** : `createScan` (génère la grille via `buildGrid`, ids de points pré-générés côté JS pour servir de `tag` de corrélation, insère les points, soumet les tâches, un point sans tâche acceptée reste `provider_task_id: null` — limite connue, pas de retry automatique en G2) ; `refreshScan` (idempotent — pense à `tasks_ready` puis `task_get` uniquement sur les tâches prêtes, met à jour `rank`/`competitors`/`fetched_at` par point, capture `rating_snapshot`/`review_count_snapshot` à la première fiche trouvée, finalise le scan — `arp`/`atrp`/`solv` — une fois tous les points résolus) ; safety-net quota revérifié à la création du scan (indépendant de la vérification faite à la création du mot-clé, au cas où le plan aurait changé depuis).
+
+**Endpoints** : `POST /scans` (créer), `GET /scans` (historique), `GET /scans/:id` (détail + points), `POST /scans/:id/refresh` (poll manuel — réutilisé tel quel par le cron G3).
+
+**Test réel contre DataForSEO** (business `Atlasimmobilier`, plan Starter temporaire, grille 5×5 = 25 points, coût réel 0,015 $) : scan complété en ~1 poll, **13/25 points classés**, ARP=14.00, ATRP=17.36 (vérifié à la main : `(13×14+12×21)/25=17.36` ✓), SoLV=0 %, `rating_snapshot`=4.6/25 avis (exact, vérifié contre un appel Live indépendant). Heatmap cohérente géographiquement : rang 5 au centre/sud, non classée au nord — le pattern exact que le module est censé révéler. Concurrents par point peuplés et corrects (cible exclue). Contrôle d'accès (401/403/404) et gating replacé vérifiés après restauration du plan à `null`. Données de test entièrement nettoyées (scan+points cascade, mot-clé, `plan_id` restauré).
+
+**Vérifs** : `node --check` sur les 8 fichiers créés/modifiés OK, 2 migrations appliquées, backend redémarré (`PostgreSQL connecté` + crons OK).
+
+**Décision post-G2 (2026-07-01) — queue DataForSEO Priority retenue** : passage de la queue Standard (~0,0006 $/tâche, ~5 min) à **Priority** (~0,0012 $/tâche, ~1 min) — `TASK_PRIORITY = 2` dans `dataforseo.provider.js` (champ `priority` du payload `task_post`). Vérifié en réel : coût exact (0,0012 $), délai réel observé 1-2 s sur un scan 3×3 (bien en dessous de la moyenne annoncée), forme de réponse identique à Standard. Décision motivée par le **design du cron G3** : turnaround plus rapide et prévisible → poll plus rapproché possible → la file `tasks_ready` de DataForSEO (plafonnée à **1000 résultats non récupérés**, vérifié en réel) reste sous pression plus faible à l'échelle. Surcoût jugé anecdotique (~0,76 $/mois/entreprise pour 7×7×3 mots-clés hebdo vs ~0,40 $ en Standard). Docs mis à jour (`GEOGRID_DESIGN_FR.md` §3/§9, cahier §9.5).
+
+### Détail session G3 — Cron & poll (2026-07-01)
+
+**Architecture retenue (validée avec l'utilisateur)** : **une seule boucle** `setInterval` (et non node-cron — 90 s n'est pas exprimable en cron, champ secondes ≤ 59) dans `jobs/scan-geogrid.js`, avec **garde anti-chevauchement**. Chaque tick, dans l'ordre : `failStuckScans` → `refreshRunningScans` → `runDueScans`.
+
+**Scalabilité (bcp de fiches — la préoccupation soulevée)** :
+- **Détection « dû »** via nouvelle colonne `geogrid_keywords.last_scanned_at` (migration 31, index `(active, last_scanned_at)`), posée **avant** la soumission → un échec (grille invalide, fournisseur KO) ne relance pas le mot-clé à chaque tick (retry à la fenêtre suivante ; scan manuel = échappatoire). Requête des dus : `last_scanned_at` NULL (jamais scanné, `NULLS FIRST`) ou plus vieux que la fenêtre (`weekly` 7 j / `daily` 1 j).
+- **Lot borné** `GEOGRID_BATCH_SIZE` (20) mots-clés/tick + **parallélisme plafonné** `GEOGRID_CONCURRENCY` (20) → étale la charge, pas de salve.
+- **Pool PostgreSQL relevé 5 → 20** (`DB_POOL_MAX` dans `database.js`) pour absorber les 20 lancements parallèles sans saturer le pool (chaque scan ~5 requêtes).
+- **Un seul `tasks_ready` par tick** partagé entre tous les scans `running` (au lieu d'un appel par scan) → réduit la pression sur la file DataForSEO (plafonnée à 1000, vérifié en réel).
+- **Garde-fou scan bloqué** : `pending/running` plus vieux que `GEOGRID_SCAN_TIMEOUT_MINUTES` (15) → `failed` (points déjà obtenus conservés). 15 min ≈ 10 cycles de poll — réaliste vs turnaround ~1 min, plus les 24h initialement envisagées.
+- **Downgrade** : un mot-clé dont l'entreprise n'a plus `rank_tracking` au plan est ignoré (pas scanné).
+
+**Queue DataForSEO** : Priority (décision précédente) → turnaround ~1 min → poll toutes les 90 s finit un scan en ~2 ticks.
+
+**Paramètres réglables dans `.env`** (défauts en secours dans `rank-tracking.config.js`) : `GEOGRID_TICK_SECONDS=90`, `GEOGRID_BATCH_SIZE=20`, `GEOGRID_CONCURRENCY=20`, `GEOGRID_SCAN_TIMEOUT_MINUTES=15`, `DB_POOL_MAX=20`. Ajoutés à `.env` et `.env.example`.
+
+**Refactor `scan.service.js`** : extraction de `submitScanForKeyword(keyword)` et `applyRefresh(scan, readyTags?)` (cœurs sans contrôle d'accès, partagés entre endpoints HTTP et cron). Piège corrigé : `created_at` est un timestamp auto-géré → nom d'attribut `createdAt` en camelCase même avec `underscored: true` (contrairement aux colonnes custom snake_case), sinon la clause `where` du balayage ne filtre pas.
+
+**Tests réels** : (1) fonctions cron en isolation (grille 3×3) — `runDueScans` lance 1 puis 0 (détection « dû » + `last_scanned_at`), `refreshRunningScans` finalise (ARP/ATRP corrects), `failStuckScans` bascule un scan artificiellement vieux en `failed`. (2) **Cron réel de bout en bout** : mot-clé créé → la boucle du backend le détecte, lance le scan (~tick 1) et le finalise (tick 2), **done en 122 s, 8/9 points classés** — sans aucune action manuelle. Données de test nettoyées, plan restauré à `null`.
+
+**Vérifs** : `node --check` sur les 7 fichiers OK, migration 31 appliquée, backend redémarré (`[cron] Job geogrid démarré (tick 90s...)`). Note : lignes de tick du cron bufferisées en dev (nohup) — PM2 flushe stdout en prod.
+
+**Prochaine session : G4 — heatmap frontend** (`GeogridPage`, carte Google + pastilles de rang, sélecteur mot-clé, métriques, concurrents par point).
+
+### Détail session G4 — Heatmap frontend (2026-07-01)
+
+**Fichiers créés** :
+- `frontend/src/lib/geogrid.js` — `rankColor(rank)` / `rankLabel(rank)` / `RANK_LEGEND` (buckets Top 3 vert / 4-10 orange / 11-20 rouge / non classé rouge foncé — hex nécessaires pour les marqueurs canvas, alignés sur les tokens du thème).
+- `frontend/src/components/GeogridMap.jsx` — carte Google Maps : `importLibrary('maps'|'marker')` (même loader que `PlaceSearch`), **marqueur `Marker` legacy** (pas d'`AdvancedMarkerElement` qui exigerait un `mapId` Cloud) = pastille circulaire colorée + rang au centre, `fitBounds` auto sur la grille, clic → `InfoWindow` listant les concurrents du point. Fallback chargement/erreur.
+- `frontend/src/pages/GeogridPage.jsx` — orchestration : gating par plan (écran verrouillé + CTA `/pricing` si `quota.enabled=false`), gestion des mots-clés (ajout borné au quota, suppression, sélecteur), bouton « Scanner maintenant », **polling** (`POST /scans/:id/refresh` toutes les 4 s jusqu'à `done/failed`, avec token d'annulation au changement de mot-clé / démontage — pattern de polling introduit, inexistant avant dans le front), reprise auto du polling si le dernier scan est `running`, 4 `MetricCard` (ARP/ATRP/SoLV/note), légende + date, états vides.
+
+**Branchements** : `App.jsx` (route `/positionnement` en `lazy`+`Suspense`, comme Onboarding/Collect — page lourde car charge Maps), `Sidebar.jsx` (icône `Target` + entrée « Positionnement » dans la section MODULES, **sans `soon`** donc cliquable).
+
+**Conventions respectées** : hooks `useBusiness`/`useLocations` (fallback `|| {}`), `business_id` en query param sur chaque appel, wrapping `AppLayout`, classes Tailwind sémantiques, gestion `loading`/`error`/vide en miroir des pages existantes (QRCode/WidgetBuilder).
+
+**Vérification (preview navigateur, données réelles)** : page rendue à `/positionnement` avec un vrai scan (Atlasimmobilier/Marrakech, 5×5) → sélecteur mot-clé, quota « 1/5 », **métriques correctes** (ARP 12.69, ATRP 16.68, SoLV 0 %, note 4.6/25 avis), légende, pied « Grille 5×5 · 13/25 points classés · date ». Sidebar « Positionnement » cliquable. Tous les appels API 200 (quota/keywords/scans/detail). `vite build` OK (1835 modules, `GeogridPage` en chunk lazy 12,5 kB).
+
+**Limite de vérif** : la **heatmap Google Maps elle-même ne se peint pas dans le navigateur de preview headless** — confirmé que ce n'est pas mon code : l'API Maps **brute** (`new google.maps.Map` dans un div neuf hors composant) produit le même résultat (conteneur créé, pas de `.gm-style`, pas de tuiles). Limitation connue des navigateurs automatisés ; la carte s'affiche dans un vrai navigateur. Mon composant exécute le bon chemin (lib chargée, `Map` instanciée, `Marker` créés — warning de dépréciation observé).
+
+**Démo laissée en place pour vérif visuelle utilisateur** : entreprise de test **Atlasimmobilier** passée en plan **Starter** + 1 mot-clé « agence immobiliere marrakech » avec un scan terminé → visible sur `/positionnement` via le compte de test (à reverter : `plan_id` → `null` + purge geogrid_* quand terminé).
+
+**Prochaine session : G5 — timeline & polish** (courbes ARP/ATRP/SoLV dans le temps — nécessite d'ajouter une lib de graphe, aucune présente ; scan à la demande déjà là ; états vides/loaders déjà en place).
+
 ---
 
 ## Références techniques critiques
@@ -361,6 +458,13 @@ VITE_GOOGLE_CLIENT_ID=...
 22. create-tags (table `tags` : `business_id`, `name`, `color` + index unique `business_id,name`)
 23. create-review-tags (liaison N–N `review_tags`, PK composite `review_id`+`tag_id`, FK `CASCADE`)
 24. add-tag-to-widgets (`widgets.tag_id` FK `SET NULL`)
+25. create-geogrid-keywords (table `geogrid_keywords` : business_id/location_id, keyword, grid_size, grid_spacing_m, frequency, active — unique `location_id+keyword`)
+26. create-geogrid-scans (table `geogrid_scans` : métriques ARP/ATRP/SoLV, statut pending/running/done/failed)
+27. create-geogrid-points (table `geogrid_points` : row/col/quadrant/lat/lng/rank/competitors JSONB)
+28. add-module-quotas-to-plans (`plans.module_quotas` JSONB — quotas geogrid seedés Starter/Pro/Agence)
+29. add-provider-fields-to-geogrid-points (`provider_task_id`, `fetched_at`)
+30. fix-credits-used-type (`geogrid_scans.credits_used` INTEGER → DECIMAL(10,4) — coût fournisseur fractionnaire)
+31. add-last-scanned-to-geogrid-keywords (`geogrid_keywords.last_scanned_at` + index `(active, last_scanned_at)` — détection « dû » du cron)
 
 ### Bugs corrigés — ne pas reproduire
 

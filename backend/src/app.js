@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit')
 const sequelize = require('./config/database')
 const { startScheduledInvitationsJob } = require('./jobs/scheduled-invitations')
 const { startSyncReviewsJob } = require('./jobs/sync-reviews')
+const { startScanGeogridJob } = require('./jobs/scan-geogrid')
 
 const app = express()
 
@@ -32,6 +33,7 @@ app.use('/api/v1/credits',  require('./modules/credits/credits.routes'))
 app.use('/api/v1/stripe',   require('./modules/stripe/stripe.routes'))
 app.use('/api/v1/widgets',  require('./modules/widgets/widget.routes'))
 app.use('/api/v1/tags',     require('./modules/tags/tag.routes'))
+app.use('/api/v1/rank-tracking', require('./modules/rank-tracking/rank-tracking.routes'))
 
 const PORT = process.env.PORT || 3000
 
@@ -40,6 +42,7 @@ sequelize.authenticate()
     console.log('PostgreSQL connecté')
     startScheduledInvitationsJob()
     startSyncReviewsJob()
+    startScanGeogridJob()
     app.listen(PORT, () => console.log(`Backend Locagain sur http://localhost:${PORT}`))
   })
   .catch(err => {
