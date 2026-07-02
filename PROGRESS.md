@@ -205,8 +205,28 @@
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
 | 20 | OAuth Google Business Profile | ✅ Terminé | Flow OAuth2 complet (state JWT signé, tokens AES-256-GCM), modèle GoogleConnection, section Settings connect/disconnect. ⚠️ Ajouter `http://localhost:3000/api/v1/google/callback` dans Google Cloud Console → Identifiants → URI de redirection autorisés. |
-| 21 | Sync avis | 🚧 Bloqué | Backend complet (modèle Review, module reviews/, cron quotidien 3h, route /api/v1/reviews). Frontend ReviewsPage avec filtres + pagination. **Bloqué : quota GMB à 0** sur `mybusinessaccountmanagement.googleapis.com` — projet Cloud non vérifié. À débloquer : augmenter le quota ou publier l'app OAuth dans Cloud Console. Migration 19 (`reply_time`) à appliquer quand débloqué. |
-| 22 | Interface avis | 🚧 Bloqué | Dépend de 21. Réponse aux avis (POST GMB API) à implémenter quand quota débloqué. |
+| 21 | Sync avis | ✅ Terminé (DataForSEO, 2026-07-02) | **Bascule GMB → DataForSEO** (quota GMB abandonné). Provider `business_data/google/reviews` (task_post→tasks_ready→task_get), table `review_sync_jobs`, cron boucle 60s (backfill/incrémental), **gating par plan** (`module_quotas.reviews`), échelonnement déterministe, upsert via index unique. Migrations 43-45. Vérifié en réel (64 avis Atlas importés) + preview. Voir détail ci-dessous. |
+| 22 | Interface avis | 🟡 Lecture faite | `ReviewsPage` lit les avis DataForSEO (bouton Synchroniser asynchrone + polling, file Priority). **Répondre aux avis** repoussé (2ᵉ temps) : génération par IA prévue (prompt configurable). ⚠️ DataForSEO ne **publie pas** sur Google → canal d'écriture à trancher (API GMB ou saisie manuelle assistée). |
+
+### Bascule synchro avis GMB → DataForSEO (session 21, 2026-07-02)
+
+**Pourquoi** : l'autorisation GMB (quota `mybusinessaccountmanagement.googleapis.com` = 0, projet Cloud non vérifié) est trop complexe à obtenir. On réutilise **DataForSEO** (déjà en place pour le geogrid) pour **lire** les avis. Plus besoin d'OAuth : la synchro marche pour toute localisation ayant un `google_place_id`.
+
+**Backend** (module `reviews/` refondu, mécanique GMB retirée) :
+- **Provider** `providers/dataforseo-reviews.provider.js` : endpoint `business_data/google/reviews` (task_post→tasks_ready→task_get), **distinct du geogrid** (serp/google/maps) → `tasks_ready` séparé, aucune collision de poll. ⚠️ **`location_coordinate` obligatoire même avec `place_id`** (la doc dit l'inverse à tort — sinon `40501 Invalid Field: location_name`) : on envoie les coordonnées de la fiche.
+- **Table** `review_sync_jobs` (1 job = 1 tâche pour 1 fiche) + colonnes `locations.{last,next}_reviews_sync_at`/`reviews_backfilled_at`. **Index unique** `reviews (platform, external_id)` (migration 45) pour l'upsert `ON CONFLICT` (jamais posé avant car sync GMB jamais exécuté).
+- **Mapping** : `review_id→external_id`, `profile_name→author_name`, `rating.value→rating`, `review_text→text`, `timestamp→published_at`, `owner_answer→reply_text`, `owner_timestamp→reply_time`.
+- **Service** : `enqueueDueLocations` (fiches dues, **échelonnement déterministe** par hash d'UUID → jamais d'appels en rafale), `pollRunningJobs` (upsert + garde-fou saturation), `failStuckJobs`, `triggerSync` (manuel, gaté), `getSyncStatus` (polling front). Backfill au 1er passage (depth 200), incrémental ensuite (depth 10, `sort_by=newest`).
+- **Gating par plan** (`module_quotas.reviews`, migration 44) : **Starter** quotidien (1440 min) · **Pro** toutes les 6h (360) · **Agence** toutes les heures (60) · **Gratuit exclu**. `interval_minutes` pilote la cadence. Éditable Super Admin.
+- **Cron** `jobs/sync-reviews.js` : boucle `setInterval` (modèle geogrid), `failStuck→poll→enqueueDue`, poll silencieux à vide. File **standard** en auto (économique), **priority** pour le bouton manuel (~1 min).
+
+**Coût DataForSEO** (facturé sur le depth **demandé**, par tranche de 10) : incrémental depth 10 = **$0.00075/synchro** (standard) ; backfill 200 = **$0.015 one-shot/fiche**. Par fiche, ~$0.02–0.54/mois selon le plan. `.env` : `REVIEWS_*` (tick, depth, backfill, queue…).
+
+**Frontend** : `ReviewsPage` — `POST /sync` (async) → polling `/sync/status` → recharge. Gère le 403 (plan sans synchro).
+
+**Vérifié en réel** : 2 fiches Atlasimmobilier (Starter), **64 avis importés** (39+25), mapping complet (notes/dates/auteurs OK, `owner_answer` lu — la fiche n'a juste aucune réponse), place_id `ChIJ…` validé. Preview : rendu des 64 avis, bouton Synchroniser (POST 200 + polling 200), 0 erreur console. Données de test `seed-` nettoyées.
+
+**Limite à trancher (2ᵉ temps)** : DataForSEO est en **lecture seule**. La génération IA d'une réponse est faisable, mais sa **publication** sur Google nécessitera l'API GMB (écriture) ou une saisie manuelle assistée. Le module `google/` OAuth est laissé **inerte** (non supprimé) pour cette éventualité.
 
 ## PHASE 7 — CRÉDITS & STRIPE
 
@@ -527,6 +547,8 @@ Session **100 % frontend** (aucun endpoint backend nécessaire — tout existait
 **Décision pour la suite (pas cette session)** : l'ancienne `GeogridPage` (résultats/heatmap) reste à `/positionnement/suivi` — son retrait est repoussé à **G9**, qui la remplace par la vraie page Suivi ; la retirer maintenant aurait supprimé tout moyen de voir les résultats avant G9.
 
 **Vérifié** : `esbuild` (bundle à blanc, aucune erreur de syntaxe) + série de tests API authentifiés contre le backend réel — `GET /competitors/detected` (30 résultats réels), cycle complet `POST`/`GET`/`DELETE /competitors` (avec les mêmes champs que le frontend consomme). *Pas* de nouveau test réel de `POST /runs` avec coût DataForSEO : ce chemin est inchangé depuis G7 où il a déjà été prouvé (voir détail G7), seul le branchement frontend est nouveau. Vérification visuelle toujours en attente côté utilisateur (contrainte de session : port 5173 tenu par un terminal externe) — mais entre G8.2 et G8.3, l'utilisateur a lui-même ajouté 4 mots-clés réels via l'Étape 2, confirmant que ce morceau fonctionne bien en conditions réelles.
+
+**Correctif retour utilisateur (2026-07-02, même jour)** : le tri des concurrents détectés par « meilleur rang vu » était peu discriminant — avec 5 mots-clés × ~49 points, presque toute fiche sérieuse décroche un #1 quelque part une fois. Remplacé par un agrégat sur l'ensemble des points/mots-clés échantillonnés : `avg_position` (façon ATRP, absence imputée à 21, sert au **tri**) + `avg_rank_when_seen` (moyenne uniquement sur les apparitions, sert à l'**affichage** — les valeurs mélangées se tassent près de 21 sur un grand pool de points, peu lisibles isolément). Chaque puce affiche désormais « Nom · N× · ØX.X » (vu N fois, position moyenne quand présent). **Vérifié en direct** sur les vraies données : le concurrent classé en tête (FJ Morocco Agency, vu 10×, Ø3.4 quand présent) n'a **jamais** été #1 (`top1_count: 0`) — preuve que l'ancien critère l'aurait complètement ignoré alors qu'il est le plus visible en réalité.
 
 **Prochaine session : G9 — Frontend Suivi** (vue globale + par mot-clé, tableaux triables fiche+concurrents, courbes Recharts, retrait de l'ancienne `GeogridPage`).
 

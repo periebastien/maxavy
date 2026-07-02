@@ -152,7 +152,13 @@ async function recompute(businessId, userId, configId) {
 // Concurrents « repérés » : fiches vues dans les points des scans récents mais PAS ENCORE suivies —
 // alimente l'étape 4 du wizard (« sélection depuis les concurrents détectés », GEOGRID_REFONTE_FR.md §6).
 // Bornée aux 20 scans les plus récents (coût de lecture borné, pas besoin de tout l'historique pour des
-// suggestions). Triée par meilleur rang observé (les concurrents les plus visibles en premier).
+// suggestions).
+//
+// Triée par POSITION MOYENNE sur l'ensemble des points échantillonnés (tous mots-clés confondus), pas
+// par meilleur rang isolé : avec des dizaines de points × plusieurs mots-clés, presque toute fiche
+// sérieuse décroche un #1 quelque part une fois — ça ne discrimine rien. La moyenne façon ATRP (absence
+// imputée à NOT_RANKED=21, même convention que aggregateCompetitorOnPoints) récompense la présence
+// constante à une bonne place plutôt qu'un pic isolé — retour utilisateur du 2026-07-02.
 async function detected(businessId, userId, configId) {
   await ensureAccess(businessId, userId)
   const config = await ensureConfig(configId, businessId)
@@ -174,18 +180,42 @@ async function detected(businessId, userId, configId) {
     where: { scan_id: { [Op.in]: scans.map(s => s.id) } },
     attributes: ['competitors'],
   })
+  const totalPoints = points.length
+  if (!totalPoints) return []
 
-  const seen = new Map() // place_id -> { place_id, name, best_rank }
+  const stats = new Map() // place_id -> { place_id, name, sumRank, appearances, top1, top3 }
   for (const pt of points) {
     for (const c of pt.competitors || []) {
-      if (!c.place_id || trackedIds.has(c.place_id)) continue
-      const existing = seen.get(c.place_id)
-      if (!existing || (c.rank != null && (existing.best_rank == null || c.rank < existing.best_rank))) {
-        seen.set(c.place_id, { place_id: c.place_id, name: c.name, best_rank: c.rank })
+      if (!c.place_id || trackedIds.has(c.place_id) || c.rank == null) continue
+      let s = stats.get(c.place_id)
+      if (!s) {
+        s = { place_id: c.place_id, name: c.name, sumRank: 0, appearances: 0, top1: 0, top3: 0 }
+        stats.set(c.place_id, s)
       }
+      s.name = c.name || s.name
+      s.sumRank += c.rank
+      s.appearances++
+      if (c.rank === 1) s.top1++
+      if (c.rank <= 3) s.top3++
     }
   }
-  return [...seen.values()].sort((a, b) => (a.best_rank ?? 999) - (b.best_rank ?? 999)).slice(0, 30)
+
+  // avg_position (tri) mélange fréquence et qualité (façon ATRP) — pertinent pour classer, mais les
+  // valeurs se tassent près de NOT_RANKED (peu lisible isolément, le pool de points étant beaucoup plus
+  // grand que le nombre d'apparitions de n'importe quel concurrent). avg_rank_when_seen (affichage) est
+  // la moyenne UNIQUEMENT sur ses apparitions — lisible indépendamment ("vu N fois, en moyenne en Xe position").
+  return [...stats.values()]
+    .map(s => ({
+      place_id: s.place_id,
+      name: s.name,
+      appearances: s.appearances,
+      avg_rank_when_seen: round2(s.sumRank / s.appearances),
+      top1_count: s.top1,
+      top3_count: s.top3,
+      avg_position: round2((s.sumRank + (totalPoints - s.appearances) * NOT_RANKED) / totalPoints),
+    }))
+    .sort((a, b) => a.avg_position - b.avg_position)
+    .slice(0, 30)
 }
 
 module.exports = { list, create, remove, recompute, detected, computeAndStoreForScan }

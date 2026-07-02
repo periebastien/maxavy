@@ -602,13 +602,14 @@ export default function GeogridConfigPage() {
                 </div>
               ) : detectedList.length > 0 && (
                 <div className="pt-3 border-t border-border">
-                  <p className="text-xs font-medium text-text-secondary mb-2">Concurrents repérés dans vos scans</p>
+                  <p className="text-xs font-medium text-text-secondary mb-2">Concurrents repérés dans vos scans — triés du plus au moins visible</p>
                   <div className="flex flex-wrap gap-2">
                     {detectedList.map(d => (
                       <button key={d.place_id} onClick={() => addCompetitor(d.place_id, d.name)} disabled={atMaxCompetitors}
-                        className="inline-flex items-center gap-1.5 text-xs px-2.5 h-7 rounded-full border border-border hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                        <Plus size={12} /> {d.name || d.place_id}
-                        {d.best_rank != null && <span className="text-text-tertiary">#{d.best_rank}</span>}
+                        className="inline-flex items-center gap-2 text-xs pl-2.5 pr-3 h-8 rounded-full border border-border hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <Plus size={12} className="shrink-0" />
+                        <span className="max-w-[200px] truncate">{d.name || d.place_id}</span>
+                        <span className="text-text-tertiary shrink-0">{d.appearances}× · Ø{d.avg_rank_when_seen}</span>
                       </button>
                     ))}
                   </div>
