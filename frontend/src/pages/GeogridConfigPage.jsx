@@ -30,6 +30,14 @@ function fmtNum(n) {
   return (Number.isInteger(r) ? r : r.toFixed(r < 1 ? 2 : 1)).toString().replace('.', ',')
 }
 
+// Distance approximative (m) entre le centre et un point, pour dimensionner le contour de cercle et la
+// couverture d'après les points réels du disque (dont le rayon dépend de la disposition, pas d'une formule carrée).
+function pointDistM(center, p) {
+  const dLat = (Number(p.lat) - center.lat) * 111320
+  const dLng = (Number(p.lng) - center.lng) * 111320 * Math.cos((center.lat * Math.PI) / 180)
+  return Math.hypot(dLat, dLng)
+}
+
 export default function GeogridConfigPage() {
   const navigate = useNavigate()
   const { activeBusiness } = useBusiness()
@@ -173,10 +181,15 @@ export default function GeogridConfigPage() {
 
   const allowedShapes = quota?.allowed_shapes || ['square']
   const sizeOptions = gridSizeOptions(quota?.max_grid_size || 7)
-  const pointCount = preview?.points?.length ?? 0
-  const coverageKm = ((gridSize - 1) * spacing) / 1000
-  // Rayon du contour de cercle (mode 'circle') = distance au coin de la grille (circonscrit) + petite marge.
-  const circleRadiusM = shape === 'circle' ? Math.round(((gridSize - 1) / 2) * spacing * Math.SQRT2 * 1.06) : 0
+  const previewPoints = preview?.points || []
+  const pointCount = previewPoints.length
+  // Rayon du disque réel = distance du point le plus éloigné du centre. Sert au contour de cercle
+  // (mode 'circle', + petite marge) et à la couverture (diamètre du disque).
+  const maxRadiusM = shape === 'circle' && center && previewPoints.length
+    ? Math.max(...previewPoints.map(p => pointDistM(center, p)))
+    : 0
+  const circleRadiusM = maxRadiusM ? Math.round(maxRadiusM * 1.06) : 0
+  const coverageKm = maxRadiusM ? (2 * maxRadiusM) / 1000 : ((gridSize - 1) * spacing) / 1000
 
   return (
     <AppLayout title="Positionnement — Configuration">
@@ -200,7 +213,7 @@ export default function GeogridConfigPage() {
             {center ? (
               <GeogridConfigMap
                 center={center}
-                points={preview?.points || []}
+                points={previewPoints}
                 shape={shape}
                 radiusMeters={circleRadiusM}
                 onCenterChange={onCenterChange}

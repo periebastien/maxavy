@@ -174,11 +174,11 @@ Verrou plan : si `rank_tracking.enabled = false`, la section est verrouillée (c
 
 ### Étape 1 · La grille
 - **Carte** avec **centre déplaçable** (marqueur draggable) + bouton **« Recentrer sur la fiche »**. Stocké dans `config.center_lat/lng`.
-- **Forme** : carré / cercle — **même nombre de points dans les deux cas** (décision produit, screenshot de référence 2026-07-02). Le cercle est un **contour de couverture circonscrit** dessiné autour de la grille N×N complète, PAS un masque qui retirerait les points des coins. **Dimension** (dans le plafond du plan). **Espacement** (m).
+- **Forme** : carré / cercle — **même nombre de points dans les deux cas** (décision produit, screenshots de référence 2026-07-02). En mode cercle, **les points remplissent le disque** (ce sont les N² points les plus proches du centre), ils forment donc un vrai cercle, pas un carré ; un contour `google.maps.Circle` est dessiné autour. **Dimension** (dans le plafond du plan). **Espacement** (m).
 - **Compteur live** (à côté du bouton « Enregistrer et continuer », sous la carte) : « **X points · couverture ~Y km** ». Aperçu via `/grid-preview` (sans scan). *Le coût en $ n'est pas affiché à l'utilisateur* (interne) — à terme, exprimé en « points par rapport au pack » quand ce modèle sera défini.
 - Nombre de points par grille (identique carré/cercle) : 3×3 → 9, 5×5 → 25, 7×7 → 49, 9×9 → 81, 11×11 → 121, 13×13 → 169, 15×15 → 225.
 
-> Le **nombre de points** (= N²) pilote le coût (plafonné par plan) ; l'**espacement** ne change que la couverture (libre). En mode cercle, le contour circonscrit a pour rayon la distance au coin de la grille (`(N−1)/2 × espacement × √2`), dessiné côté front (`google.maps.Circle`).
+> Le **nombre de points** (= N²) pilote le coût (plafonné par plan) ; l'**espacement** ne change que la couverture (libre). En mode cercle, `buildGrid` renvoie les **N² points les plus proches du centre** (disque optimal — pour N impair ≤ 15 ça tombe pile sur des couronnes complètes, ex. 7×7 → disque de rayon 4 = 49 pts). Le contour et la couverture (diamètre) sont calculés côté front d'après le point le plus éloigné.
 
 ### Étape 2 · Les mots-clés
 - Ajout / suppression, compteur « **X / N** » borné au plan (par localisation). Validation backend inchangée (403 si dépassé).
@@ -323,8 +323,8 @@ Issues d'une relecture croisée cahier ↔ code réel. À intégrer dans les ses
 - `credits_used` reste **DECIMAL(10,4)** (déjà migré, migration 30) — ne pas régresser en INT.
 
 **Grille cercle**
-- **Cercle = contour circonscrit** (révisé G8.1, 2026-07-02) : `buildGrid` renvoie la grille N×N **complète** quelle que soit la forme (même nombre de points). Le cercle est un `google.maps.Circle` dessiné côté front (rayon = `(N−1)/2 × espacement × √2 × 1.06`, coins de la grille juste à l'intérieur). Le masque disque initial (chop des coins → 29 pts pour 7×7) est abandonné.
-- **Rang par quadrant** : les 4 quadrants restent équilibrés (grille complète, pas de coins retirés). Métrique secondaire.
+- **Cercle = disque des N² points les plus proches** (révisé 2 fois le 2026-07-02) : `buildGrid` en mode cercle renvoie les `N²` points de lattice les plus proches du centre → remplit un disque de façon optimale, **même nombre de points qu'en carré**, mais les points **forment un cercle** (v1 « contour autour d'un carré » rejetée par l'utilisateur : les points faisaient un carré ; v0 « masque disque » rejetée : 29 pts au lieu de 49). Tri déterministe (distance puis balayage). Le contour `google.maps.Circle` et la couverture (diamètre) sont dérivés côté front du point le plus éloigné.
+- **Rang par quadrant** : quadrants équilibrés par construction (disque symétrique). Métrique secondaire.
 
 **Concurrents**
 - `MAX_COMPETITORS` passe de **5 à ~20** en G7 (profondeur DataForSEO `depth=20` déjà en place → **aucun surcoût**). **L'agrégation rétroactive ne vaut que pour les scans postérieurs** à ce changement (les scans G1→G4 n'ont que 5 résultats/point).
