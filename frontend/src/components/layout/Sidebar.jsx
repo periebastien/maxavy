@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Eye, MessageSquare, Users, Mail,
-  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard, X, Target
+  QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard, X,
+  Settings2, LineChart, Swords
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useBusiness } from '../../contexts/BusinessContext'
@@ -43,9 +44,16 @@ const sections = [
     ]
   },
   {
+    title: 'POSITIONNEMENT',
+    items: [
+      { label: 'Configuration', to: '/positionnement/configuration', icon: Settings2 },
+      { label: 'Suivi', to: '/positionnement/suivi', icon: LineChart, soon: true },
+      { label: 'Concurrents', to: '/positionnement/concurrents', icon: Swords, soon: true },
+    ]
+  },
+  {
     title: 'MODULES',
     items: [
-      { label: 'Positionnement', to: '/positionnement', icon: Target },
       { label: 'Concurrence', to: '/competitors', icon: BarChart2, soon: true },
       { label: 'Publications GBP', to: '/gbp-posts', icon: FileText, soon: true },
       { label: 'Photos GBP', to: '/gbp-photos', icon: Image, soon: true },
