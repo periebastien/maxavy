@@ -26,20 +26,29 @@ export function TrendControls({ rangePreset, setRangePreset, granularity, setGra
   )
 }
 
-// data : sortie de mergeSeriesForChart. lines : [{ key, color }] — 1 par série affichée.
-export function TrendChart({ data, lines }) {
+// data : sortie de mergeSeriesForChart. lines : [{ key, color, label? }] — 1 par série affichée. `key` sert
+// de dataKey/clé React (doit être unique — ex. place_id) ; `label` (optionnel, défaut = key) est le nom
+// affiché dans la légende/l'infobulle. Les deux sont dissociés car deux concurrents peuvent avoir le même
+// nom affiché (franchises) sans jamais partager le même `key`.
+// onDayClick(payload) : appelé au clic sur un point du graphe ; payload = ligne cliquée (contient .key et
+// .label du bucket) → la page mappe .key vers un rapport pour piloter la carte. height : hauteur en px.
+export function TrendChart({ data, lines, yReversed = true, yLabel = 'Position', height = 320, onDayClick }) {
   if (!data.length) return <p className="text-sm text-text-tertiary text-center py-10">Pas encore assez de données pour tracer une courbe.</p>
+  const handleClick = onDayClick
+    ? e => { const p = e?.activePayload?.[0]?.payload; if (p) onDayClick(p) }
+    : undefined
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+        onClick={handleClick} style={onDayClick ? { cursor: 'pointer' } : undefined}>
         <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF2" />
         <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6B6B78' }} />
-        <YAxis reversed allowDecimals={false} tick={{ fontSize: 12, fill: '#6B6B78' }}
-          label={{ value: 'Position', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B6B78' } }} />
+        <YAxis reversed={yReversed} allowDecimals={false} tick={{ fontSize: 12, fill: '#6B6B78' }}
+          label={{ value: yLabel, angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B6B78' } }} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {lines.map(l => (
-          <Line key={l.key} type="monotone" dataKey={l.key} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          <Line key={l.key} type="monotone" dataKey={l.key} name={l.label || l.key} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
         ))}
       </LineChart>
     </ResponsiveContainer>

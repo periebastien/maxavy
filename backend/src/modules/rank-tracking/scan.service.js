@@ -429,6 +429,43 @@ async function getRun(runId, businessId, userId) {
   return { run, scans }
 }
 
+// Heatmap « moyenne globale » d'un rapport : pour chaque point de la grille, le rang MOYEN sur tous les
+// scans terminés du rapport (rang absent imputé à NOT_RANKED=21, même convention que l'ATRP). Même format
+// { center, points } que consomme GeogridMap. Un point dont la moyenne atteint 21 (jamais classé) → rank
+// null (affiché « non classé »). Alimente le mode « Moyenne globale » de la page Suivi.
+async function getRunAverageMap(runId, businessId, userId) {
+  await ensureAccess(businessId, userId)
+  if (!UUID_RE.test(runId)) throw { status: 404, message: 'Rapport introuvable' }
+  const run = await GeogridRun.findOne({ where: { id: runId, business_id: businessId } })
+  if (!run) throw { status: 404, message: 'Rapport introuvable' }
+
+  const scans = await GeogridScan.findAll({
+    where: { run_id: run.id, status: 'done' },
+    attributes: ['id', 'center_lat', 'center_lng'],
+  })
+  if (!scans.length) return { center: null, points: [] }
+
+  const points = await GeogridPoint.findAll({
+    where: { scan_id: { [Op.in]: scans.map(s => s.id) } },
+    attributes: ['row', 'col', 'lat', 'lng', 'rank'],
+  })
+
+  const byCell = new Map() // "row:col" -> { row, col, lat, lng, sum, count }
+  for (const p of points) {
+    const key = `${p.row}:${p.col}`
+    let cell = byCell.get(key)
+    if (!cell) { cell = { row: p.row, col: p.col, lat: p.lat, lng: p.lng, sum: 0, count: 0 }; byCell.set(key, cell) }
+    cell.sum += (p.rank == null ? NOT_RANKED : p.rank)
+    cell.count++
+  }
+  const aggPoints = [...byCell.values()].map(c => {
+    const avg = Math.round(c.sum / c.count)
+    return { row: c.row, col: c.col, lat: c.lat, lng: c.lng, rank: avg >= NOT_RANKED ? null : avg, competitors: [] }
+  })
+  const first = scans[0]
+  return { center: { lat: Number(first.center_lat), lng: Number(first.center_lng) }, points: aggPoints }
+}
+
 // Série temporelle brute d'un mot-clé (scans terminés, triés par date) — alimente les courbes G9.
 // Pas d'agrégation jour/semaine/mois ici : c'est la couche de visualisation (frontend) qui bucketise.
 async function getTrend(businessId, userId, keywordId) {
@@ -630,7 +667,7 @@ async function relaunchDueRetryRuns(batchSize, concurrency) {
 
 module.exports = {
   createScan, refreshScan, listScans, getScan,
-  createRun, listRuns, getRun, getTrend,
+  createRun, listRuns, getRun, getRunAverageMap, getTrend,
   runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans,
   relaunchDueRetryScans, relaunchDueRetryRuns, isCircuitOpen, pointsInFlight,
 }

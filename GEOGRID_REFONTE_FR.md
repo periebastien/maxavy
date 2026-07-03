@@ -228,26 +228,29 @@ Constat : `next_run_at` était avancé **avant** le scan (anti-boucle) → un si
 
 ## 8. Suivi (lecture seule)
 
-### 8.1 Vue globale (tous les mots-clés)
-- **Sélecteur de rapport** (liste des dates où un rapport a tourné = les `geogrid_runs done`).
-- **Tableau par mot-clé** : position moyenne (couverture) · top 3/10/20 · **évolution** vs rapport précédent (flèche).
-- **Courbe multi-mots-clés** : 1 ligne par mot-clé, date de début réglable, select `jour/semaine/mois`, select `moyenne/meilleure`.
-- Clic sur un mot-clé → vue détaillée.
+### 8.0 Page unifiée (refonte 2026-07-03)
 
-### 8.2 Vue par mot-clé
-- **Heatmap** du rapport sélectionné (composant `GeogridMap` réutilisé).
-- **Cartes** : position moyenne (couverture / visible), part de voix, top 3/10/20.
-- **Tableau triable** « ma fiche + concurrents » : position moyenne · top 3/10/20, tri par défaut sur le mieux positionné.
-- **Courbe** du mot-clé (même réglages qu'en 8.1).
+Une **seule vue** (fin de la scission vue globale / vue par mot-clé), pilotée par un **sélecteur de mot-clé** commun au graphe ET à la carte :
+- Option **« Moyenne globale »** (défaut) = toutes les requêtes affichées ensemble sur le graphe (1 ligne/mot-clé) ; sur la carte, une **heatmap de moyenne globale** (rang moyen par point sur tous les scans du rapport, absent imputé à 21 comme l'ATRP — endpoint `GET /runs/:id/average-map`).
+- Un **mot-clé précis** = sa courbe seule sur le graphe + sa heatmap sur la carte.
+- **Sélection unique** (un à la fois) : la carte ne peut afficher qu'une heatmap.
+
+Disposition (haut → bas), graphe et carte **pleine largeur** :
+1. **Grand graphe** (`TrendChart`, hauteur 420) — **clic sur un jour** de la courbe → sélectionne le rapport correspondant et met à jour la carte (`onDayClick` → clé de bucket → run le plus récent du bucket ; net en granularité « Jour », sinon rapport le plus récent du regroupement). Sélecteur de rapport (menu) conservé en alternative au clic.
+2. **Grande carte** (`GeogridMap`, hauteur 600) — heatmap du mot-clé, ou moyenne globale.
+3. En mode mot-clé : **cartes de métriques** ARP/ATRP/SoLV/note + **tableau « ma fiche + concurrents »** (masqués en mode global).
+4. **Tableau d'évolution** par mot-clé du rapport (position moyenne · top 3/10/20 · flèche vs rapport précédent) ; **clic sur une ligne** = focus sur ce mot-clé.
 - **Aucune édition** ici (ni mots-clés, ni grille, ni planning).
 
 ---
 
 ## 9. Concurrents (page dédiée)
 
-- Vue **comparaison** : comment ma fiche se situe face aux concurrents sélectionnés dans la config.
-- Pour un **rapport** (date) et un **mot-clé** : le tableau triable « ma fiche + concurrents » (§8.2).
-- **Courbes de comparaison** dans le temps : ma position moyenne vs celle de chaque concurrent (par mot-clé), mêmes réglages granularité/agrégation.
+Même gabarit que le Suivi (refonte 2026-07-03) : **grand graphe de comparaison** en haut + **grande carte** en dessous + tableau.
+- **Sélecteur mot-clé** (un à la fois — pas de « moyenne globale » ici, la comparaison est par requête) + sélecteur de rapport.
+- **Grand graphe** : ma position moyenne vs celle de chaque concurrent (par mot-clé), mêmes réglages granularité/agrégation ; **clic sur un jour** → sélectionne le rapport et met à jour la carte.
+- **Grande carte** : **ma heatmap** (celle de la fiche) pour le mot-clé/jour sélectionné.
+- **Tableau triable** « ma fiche + concurrents » (§8) sous la carte.
 - Point d'entrée pour **ajouter/retirer** des concurrents (renvoie à l'étape 4 de la config) — dont la **sélection depuis les concurrents détectés**.
 
 ---

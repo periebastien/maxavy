@@ -2,15 +2,30 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MapPin, Loader2, Lock, FileSearch, Swords } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
+import GeogridMap from '../components/GeogridMap'
 import CompetitorTable from '../components/GeogridCompetitorTable'
 import { TrendControls, TrendChart, LINE_COLORS } from '../components/GeogridTrendChart'
+import { RANK_LEGEND } from '../lib/geogrid'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
-import { filterByRange, bucketize, mergeSeriesForChart } from '../lib/geogrid-trend'
+import { filterByRange, bucketize, mergeSeriesForChart, bucketKeyOf } from '../lib/geogrid-trend'
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function RankLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-xs text-text-tertiary">
+      {RANK_LEGEND.map(l => (
+        <span key={l.label} className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: l.color }} />
+          {l.label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export default function GeogridConcurrentsPage() {
@@ -22,15 +37,14 @@ export default function GeogridConcurrentsPage() {
   const [error, setError] = useState('')
 
   const [keywords, setKeywords] = useState([])
-  const [runs, setRuns] = useState([])           // rapports terminés, plus récent d'abord
-  const [competitors, setCompetitors] = useState([]) // concurrents suivis sur la config de cette localisation
+  const [runs, setRuns] = useState([])
+  const [competitors, setCompetitors] = useState([])
 
   const [selectedKeywordId, setSelectedKeywordId] = useState(null)
   const [selectedRunId, setSelectedRunId] = useState(null)
-  const [scanDetail, setScanDetail] = useState(null) // { scan, points, competitors } pour le tableau
+  const [scanDetail, setScanDetail] = useState(null) // { scan, points, competitors } — carte + tableau
   const [loadingScanDetail, setLoadingScanDetail] = useState(false)
 
-  // Courbe de comparaison : ma fiche (atrp, /trend) + chaque concurrent (avg_position, /competitors/trend)
   const [mineTrend, setMineTrend] = useState([])
   const [competitorsTrend, setCompetitorsTrend] = useState([])
   const [loadingTrend, setLoadingTrend] = useState(false)
@@ -41,7 +55,6 @@ export default function GeogridConcurrentsPage() {
   const bid = activeBusiness?.id
   const locId = activeLocation?.id
 
-  // Charge quota + config (pour son id) + mots-clés + rapports + concurrents suivis.
   useEffect(() => {
     if (!bid || !locId) return
     let cancelled = false
@@ -71,7 +84,7 @@ export default function GeogridConcurrentsPage() {
     return () => { cancelled = true }
   }, [bid, locId])
 
-  // Détail du scan (mot-clé + rapport sélectionnés) pour le tableau « ma fiche + concurrents ».
+  // Détail du scan (mot-clé + rapport) : alimente la carte (heatmap de la fiche) ET le tableau concurrents.
   useEffect(() => {
     if (!bid || !selectedKeywordId || !selectedRunId) { setScanDetail(null); return }
     let cancelled = false
@@ -88,7 +101,7 @@ export default function GeogridConcurrentsPage() {
     return () => { cancelled = true }
   }, [bid, selectedKeywordId, selectedRunId])
 
-  // Courbe de comparaison pour le mot-clé sélectionné (indépendante du rapport affiché dans le tableau).
+  // Courbe de comparaison pour le mot-clé sélectionné (tout l'historique).
   useEffect(() => {
     if (!bid || !selectedKeywordId) { setMineTrend([]); setCompetitorsTrend([]); return }
     let cancelled = false
@@ -170,6 +183,10 @@ export default function GeogridConcurrentsPage() {
     )
   }
 
+  const selectedKeyword = keywords.find(kw => kw.id === selectedKeywordId)
+  const selectedRun = runs.find(r => r.id === selectedRunId)
+
+  // Courbe : ma fiche (atrp) + chaque concurrent (avg_position).
   const seriesByLabel = {
     'Ma fiche': bucketize(filterByRange(mineTrend.map(s => ({ date: s.scanned_at, value: s.atrp })), rangePreset), granularity, aggMode),
   }
@@ -181,9 +198,26 @@ export default function GeogridConcurrentsPage() {
   const chartData = mergeSeriesForChart(seriesByLabel)
   const chartLines = Object.keys(seriesByLabel).map((label, i) => ({ key: label, color: LINE_COLORS[i % LINE_COLORS.length] }))
 
+  // Clic-graphe → rapport (via ma courbe, qui porte run_id + scanned_at).
+  const bucketToRun = new Map()
+  mineTrend.forEach(pt => {
+    if (!pt.run_id) return
+    const key = bucketKeyOf(pt.scanned_at, granularity)
+    const prev = bucketToRun.get(key)
+    if (!prev || new Date(pt.scanned_at) > new Date(prev.date)) bucketToRun.set(key, { runId: pt.run_id, date: pt.scanned_at })
+  })
+  const onDayClick = payload => {
+    const hit = payload?.key && bucketToRun.get(payload.key)
+    if (hit && runs.some(r => r.id === hit.runId)) setSelectedRunId(hit.runId)
+  }
+
+  const mapData = scanDetail
+    ? { center: { lat: Number(scanDetail.scan.center_lat), lng: Number(scanDetail.scan.center_lng) }, points: scanDetail.points }
+    : null
+
   return (
     <AppLayout title="Positionnement — Concurrents">
-      <div className="max-w-4xl space-y-4">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <select value={selectedKeywordId || ''} onChange={e => setSelectedKeywordId(e.target.value)}
@@ -208,20 +242,40 @@ export default function GeogridConcurrentsPage() {
           <div className="text-sm text-danger bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>
         )}
 
-        {!scanDetail ? (
-          !loadingScanDetail && (
-            <p className="text-sm text-text-tertiary">Aucun scan pour ce mot-clé dans ce rapport.</p>
-          )
-        ) : (
-          <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />
-        )}
-
-        <div className="bg-white border border-border rounded-2xl p-5 space-y-4">
-          <TrendControls rangePreset={rangePreset} setRangePreset={setRangePreset}
-            granularity={granularity} setGranularity={setGranularity}
-            aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
-          <TrendChart data={chartData} lines={chartLines} />
+        {/* Graphe de comparaison pleine largeur */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-text-primary">
+              Comparaison · {selectedKeyword?.keyword}
+            </h3>
+            <TrendControls rangePreset={rangePreset} setRangePreset={setRangePreset}
+              granularity={granularity} setGranularity={setGranularity}
+              aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
+          </div>
+          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
+          <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
         </div>
+
+        {/* Carte pleine largeur (heatmap de ma fiche) */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-text-primary">
+            Ma carte · {selectedKeyword?.keyword}
+            {selectedRun && <span className="font-normal text-text-tertiary"> · {fmtDate(selectedRun.createdAt)}</span>}
+          </h3>
+          {loadingScanDetail ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-accent" /></div>
+          ) : mapData && mapData.points?.length > 0 ? (
+            <>
+              <GeogridMap center={mapData.center} points={mapData.points} heightClass="h-[600px]" />
+              <RankLegend />
+            </>
+          ) : (
+            <p className="text-sm text-text-tertiary py-10 text-center">Aucun scan pour ce mot-clé dans ce rapport.</p>
+          )}
+        </div>
+
+        {/* Tableau « ma fiche + concurrents » du rapport sélectionné */}
+        {scanDetail && <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />}
       </div>
     </AppLayout>
   )

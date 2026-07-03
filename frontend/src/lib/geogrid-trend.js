@@ -44,6 +44,12 @@ function bucketOf(date, granularity) {
   return { key: `${start.getFullYear()}-${pad2(start.getMonth() + 1)}`, start }
 }
 
+// Clé de bucket d'une date (même logique que bucketize) — sert à mapper un clic sur un point du graphe
+// vers le rapport (run) correspondant, côté page. Composants LOCAUX uniquement (jamais toISOString).
+export function bucketKeyOf(date, granularity) {
+  return bucketOf(date, granularity).key
+}
+
 function formatBucketLabel(start, granularity) {
   if (granularity === 'day') return start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
   if (granularity === 'week') return `Sem. du ${start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`

@@ -23,7 +23,7 @@ function infoContent(pt) {
 // Carte Google Maps rendant une heatmap de positionnement : un marqueur circulaire coloré (couleur = bucket
 // de rang) par point de grille, avec le rang au centre ; clic → InfoWindow des concurrents à ce point.
 // Marqueurs legacy `Marker` (pas d'AdvancedMarkerElement, qui exigerait un mapId Cloud).
-export default function GeogridMap({ center, points }) {
+export default function GeogridMap({ center, points, heightClass = 'h-[460px]' }) {
   const divRef = useRef(null)
   const mapRef = useRef(null)
   const markerCtorRef = useRef(null)
@@ -98,7 +98,7 @@ export default function GeogridMap({ center, points }) {
   }, [points, status])
 
   return (
-    <div className="relative w-full h-[460px] rounded-2xl overflow-hidden border border-border bg-bg-page">
+    <div className={`relative w-full ${heightClass} rounded-2xl overflow-hidden border border-border bg-bg-page`}>
       <div ref={divRef} className="w-full h-full" />
       {status !== 'ready' && (
         <div className="absolute inset-0 flex items-center justify-center bg-bg-page text-sm text-text-secondary">

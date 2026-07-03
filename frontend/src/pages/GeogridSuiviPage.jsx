@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin, Loader2, Lock, ArrowUp, ArrowDown, Minus, FileSearch, ArrowLeft } from 'lucide-react'
+import { MapPin, Loader2, Lock, ArrowUp, ArrowDown, Minus, FileSearch } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import MetricCard from '../components/common/MetricCard'
 import GeogridMap from '../components/GeogridMap'
@@ -10,10 +10,17 @@ import { RANK_LEGEND } from '../lib/geogrid'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
-import { filterByRange, bucketize, mergeSeriesForChart } from '../lib/geogrid-trend'
+import { filterByRange, bucketize, mergeSeriesForChart, bucketKeyOf } from '../lib/geogrid-trend'
+
+const ALL = '' // valeur sentinelle du sélecteur = « Moyenne globale » (toutes les requêtes)
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+function round2(n) { return Math.round(n * 100) / 100 }
+function fmtNum(n) {
+  const r = round2(n)
+  return (Number.isInteger(r) ? r : r.toFixed(1)).toString().replace('.', ',')
 }
 
 // Flèche d'évolution vs le rapport précédent — atrp est un RANG (plus bas = mieux), donc une baisse du
@@ -31,10 +38,17 @@ function EvolutionArrow({ current, previous }) {
   )
 }
 
-function round2(n) { return Math.round(n * 100) / 100 }
-function fmtNum(n) {
-  const r = round2(n)
-  return (Number.isInteger(r) ? r : r.toFixed(1)).toString().replace('.', ',')
+function RankLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-xs text-text-tertiary">
+      {RANK_LEGEND.map(l => (
+        <span key={l.label} className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: l.color }} />
+          {l.label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export default function GeogridSuiviPage() {
@@ -45,34 +59,35 @@ export default function GeogridSuiviPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const [runs, setRuns] = useState([])          // rapports terminés, plus récent d'abord
+  const [runs, setRuns] = useState([])              // rapports terminés, plus récent d'abord
   const [selectedRunId, setSelectedRunId] = useState(null)
-  const [runDetail, setRunDetail] = useState(null)     // { run, scans } du rapport sélectionné
-  const [previousScans, setPreviousScans] = useState(null) // scans du rapport juste avant (pour les flèches)
+  const [runDetail, setRunDetail] = useState(null)  // { run, scans } du rapport sélectionné (tableau + évolution)
+  const [previousScans, setPreviousScans] = useState(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
-  // Courbe multi-mots-clés
   const [keywords, setKeywords] = useState([])
-  const [trendByKeyword, setTrendByKeyword] = useState({}) // keyword_id -> [{scanned_at, atrp, ...}]
+  const [trendByKeyword, setTrendByKeyword] = useState({}) // keyword_id -> [{scanned_at, atrp, run_id, ...}]
   const [loadingTrend, setLoadingTrend] = useState(false)
   const [rangePreset, setRangePreset] = useState('90d')
   const [granularity, setGranularity] = useState('week')
   const [aggMode, setAggMode] = useState('average')
 
-  // Vue par mot-clé
-  const [selectedKeywordId, setSelectedKeywordId] = useState(null)
-  const [scanDetail, setScanDetail] = useState(null) // { scan, points, competitors } du scan sélectionné
+  // Sélection courante : '' = Moyenne globale, sinon un keyword_id. Pilote graphe ET carte.
+  const [selectedKeywordId, setSelectedKeywordId] = useState(ALL)
+  const [scanDetail, setScanDetail] = useState(null)       // { scan, points, competitors } (mode mot-clé)
   const [loadingScanDetail, setLoadingScanDetail] = useState(false)
+  const [averageMap, setAverageMap] = useState(null)       // { center, points } (mode Moyenne globale)
+  const [loadingAverageMap, setLoadingAverageMap] = useState(false)
 
   const bid = activeBusiness?.id
   const locId = activeLocation?.id
 
-  // Charge quota + liste des rapports terminés + mots-clés (indépendant du rapport sélectionné : la
-  // courbe montre tout l'historique, pas juste les mots-clés du rapport affiché dans le tableau).
+  // Charge quota + rapports terminés + mots-clés.
   useEffect(() => {
     if (!bid || !locId) return
     let cancelled = false
     setLoading(true); setError(''); setRuns([]); setSelectedRunId(null); setRunDetail(null); setPreviousScans(null)
+    setSelectedKeywordId(ALL); setScanDetail(null); setAverageMap(null)
     Promise.all([
       api.get(`/api/v1/rank-tracking/quota?business_id=${bid}&location_id=${locId}`),
       api.get(`/api/v1/rank-tracking/runs?business_id=${bid}&location_id=${locId}`),
@@ -91,7 +106,7 @@ export default function GeogridSuiviPage() {
     return () => { cancelled = true }
   }, [bid, locId])
 
-  // Historique complet par mot-clé (pour la courbe) — 1 appel par mot-clé, une seule fois par liste.
+  // Historique par mot-clé (courbe) — 1 appel par mot-clé.
   useEffect(() => {
     if (!bid || !keywords.length) { setTrendByKeyword({}); return }
     let cancelled = false
@@ -105,15 +120,13 @@ export default function GeogridSuiviPage() {
     return () => { cancelled = true }
   }, [bid, keywords])
 
-  // Charge le détail du rapport sélectionné + celui juste avant (pour l'évolution)
+  // Détail du rapport sélectionné + le précédent (tableau d'évolution).
   useEffect(() => {
     if (!bid || !selectedRunId) { setRunDetail(null); setPreviousScans(null); return }
     let cancelled = false
     setLoadingDetail(true); setError('')
-
     const idx = runs.findIndex(r => r.id === selectedRunId)
     const previousRun = idx >= 0 ? runs[idx + 1] : null
-
     Promise.all([
       api.get(`/api/v1/rank-tracking/runs/${selectedRunId}?business_id=${bid}`),
       previousRun ? api.get(`/api/v1/rank-tracking/runs/${previousRun.id}?business_id=${bid}`) : Promise.resolve(null),
@@ -128,19 +141,29 @@ export default function GeogridSuiviPage() {
     return () => { cancelled = true }
   }, [bid, selectedRunId, runs])
 
-  // Détail complet du scan (points + concurrents) pour le mot-clé sélectionné, dans le rapport affiché.
+  // Carte : mode mot-clé → scan détaillé (points + concurrents) ; mode Moyenne globale → heatmap moyenne.
   useEffect(() => {
-    if (!selectedKeywordId || !runDetail) { setScanDetail(null); return }
-    const scan = runDetail.scans.find(s => s.keyword_id === selectedKeywordId)
-    if (!scan) { setScanDetail(null); return }
+    if (!bid || !selectedRunId) { setScanDetail(null); setAverageMap(null); return }
     let cancelled = false
-    setLoadingScanDetail(true)
-    api.get(`/api/v1/rank-tracking/scans/${scan.id}?business_id=${bid}`)
-      .then(detail => { if (!cancelled) setScanDetail(detail) })
-      .catch(e => { if (!cancelled) setError(e.message) })
-      .finally(() => { if (!cancelled) setLoadingScanDetail(false) })
+
+    if (selectedKeywordId === ALL) {
+      setScanDetail(null); setLoadingAverageMap(true)
+      api.get(`/api/v1/rank-tracking/runs/${selectedRunId}/average-map?business_id=${bid}`)
+        .then(m => { if (!cancelled) setAverageMap(m) })
+        .catch(e => { if (!cancelled) setError(e.message) })
+        .finally(() => { if (!cancelled) setLoadingAverageMap(false) })
+    } else if (runDetail) {
+      setAverageMap(null)
+      const scan = runDetail.scans.find(s => s.keyword_id === selectedKeywordId)
+      if (!scan) { setScanDetail(null); return }
+      setLoadingScanDetail(true)
+      api.get(`/api/v1/rank-tracking/scans/${scan.id}?business_id=${bid}`)
+        .then(detail => { if (!cancelled) setScanDetail(detail) })
+        .catch(e => { if (!cancelled) setError(e.message) })
+        .finally(() => { if (!cancelled) setLoadingScanDetail(false) })
+    }
     return () => { cancelled = true }
-  }, [selectedKeywordId, runDetail, bid])
+  }, [bid, selectedRunId, selectedKeywordId, runDetail])
 
   // ── États de garde ──
   if (!activeBusiness || !activeLocation) {
@@ -172,7 +195,6 @@ export default function GeogridSuiviPage() {
       </AppLayout>
     )
   }
-
   if (!runs.length) {
     return (
       <AppLayout title="Positionnement — Suivi">
@@ -192,91 +214,55 @@ export default function GeogridSuiviPage() {
     )
   }
 
-  const previousByKeyword = new Map((previousScans || []).map(s => [s.keyword_id, s]))
   const selectedKeyword = keywords.find(kw => kw.id === selectedKeywordId)
+  const selectedRun = runs.find(r => r.id === selectedRunId)
+  const isGlobal = selectedKeywordId === ALL
+  const previousByKeyword = new Map((previousScans || []).map(s => [s.keyword_id, s]))
 
+  // Courbe : mode global = 1 ligne par mot-clé ; mode mot-clé = 1 seule ligne.
   const seriesByLabel = {}
-  keywords.forEach(kw => {
+  const chartKeywords = isGlobal ? keywords : (selectedKeyword ? [selectedKeyword] : [])
+  chartKeywords.forEach(kw => {
     const raw = (trendByKeyword[kw.id] || []).map(s => ({ date: s.scanned_at, value: s.atrp }))
     seriesByLabel[kw.keyword] = bucketize(filterByRange(raw, rangePreset), granularity, aggMode)
   })
   const chartData = mergeSeriesForChart(seriesByLabel)
+  const chartLines = chartKeywords.map((kw, i) => ({ key: kw.keyword, color: LINE_COLORS[i % LINE_COLORS.length] }))
 
-  const trendControlsProps = { rangePreset, setRangePreset, granularity, setGranularity, aggMode, setAggMode, loading: loadingTrend }
-
-  // ── Vue par mot-clé ──
-  if (selectedKeywordId) {
-    const singleSeries = selectedKeyword
-      ? bucketize(filterByRange((trendByKeyword[selectedKeywordId] || []).map(s => ({ date: s.scanned_at, value: s.atrp })), rangePreset), granularity, aggMode)
-      : []
-    const singleChartData = selectedKeyword ? mergeSeriesForChart({ [selectedKeyword.keyword]: singleSeries }) : []
-
-    return (
-      <AppLayout title="Positionnement — Suivi">
-        <div className="max-w-4xl space-y-4">
-          <button onClick={() => setSelectedKeywordId(null)}
-            className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-accent transition-colors">
-            <ArrowLeft size={14} /> Retour à la vue globale
-          </button>
-
-          <h2 className="text-lg font-semibold text-text-primary">{selectedKeyword?.keyword}</h2>
-
-          {error && (
-            <div className="text-sm text-danger bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>
-          )}
-
-          {loadingScanDetail ? (
-            <div className="flex justify-center py-12"><Loader2 className="animate-spin text-accent" /></div>
-          ) : !scanDetail ? (
-            <p className="text-sm text-text-tertiary">Aucun scan pour ce mot-clé dans ce rapport.</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <MetricCard label="Position moyenne (visible)" value={scanDetail.scan.arp ?? '—'} sub="ARP — là où vous apparaissez" />
-                <MetricCard label="Position moyenne (couverture)" value={scanDetail.scan.atrp ?? '—'} sub="ATRP — toute la grille" />
-                <MetricCard label="Part de voix" value={scanDetail.scan.solv != null ? `${Math.round(scanDetail.scan.solv)}%` : '—'} sub="SoLV — points en Top 3" />
-                <MetricCard label="Note de la fiche" value={scanDetail.scan.rating_snapshot ?? '—'}
-                  sub={scanDetail.scan.review_count_snapshot != null ? `${scanDetail.scan.review_count_snapshot} avis` : 'au moment du scan'} />
-              </div>
-
-              {scanDetail.points?.length > 0 && (
-                <GeogridMap center={{ lat: Number(scanDetail.scan.center_lat), lng: Number(scanDetail.scan.center_lng) }} points={scanDetail.points} />
-              )}
-
-              <div className="flex flex-wrap items-center gap-4 text-xs text-text-tertiary">
-                {RANK_LEGEND.map(l => (
-                  <span key={l.label} className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: l.color }} />
-                    {l.label}
-                  </span>
-                ))}
-              </div>
-
-              <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />
-
-              <div className="bg-white border border-border rounded-2xl p-5 space-y-4">
-                <TrendControls {...trendControlsProps} />
-                <TrendChart data={singleChartData} lines={selectedKeyword ? [{ key: selectedKeyword.keyword, color: LINE_COLORS[0] }] : []} />
-              </div>
-            </>
-          )}
-        </div>
-      </AppLayout>
-    )
+  // Mapping clic-graphe → rapport : clé de bucket (scanned_at) → run le plus récent de ce bucket.
+  const bucketToRun = new Map()
+  Object.values(trendByKeyword).forEach(series => {
+    series.forEach(pt => {
+      if (!pt.run_id) return
+      const key = bucketKeyOf(pt.scanned_at, granularity)
+      const prev = bucketToRun.get(key)
+      if (!prev || new Date(pt.scanned_at) > new Date(prev.date)) bucketToRun.set(key, { runId: pt.run_id, date: pt.scanned_at })
+    })
+  })
+  const onDayClick = payload => {
+    const hit = payload?.key && bucketToRun.get(payload.key)
+    if (hit && runs.some(r => r.id === hit.runId)) setSelectedRunId(hit.runId)
   }
 
-  // ── Vue globale ──
+  const mapData = isGlobal
+    ? averageMap
+    : (scanDetail ? { center: { lat: Number(scanDetail.scan.center_lat), lng: Number(scanDetail.scan.center_lng) }, points: scanDetail.points } : null)
+  const mapLoading = isGlobal ? loadingAverageMap : loadingScanDetail
+
   return (
     <AppLayout title="Positionnement — Suivi">
-      <div className="max-w-4xl space-y-4">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-text-secondary shrink-0">Rapport</label>
+      <div className="space-y-4">
+        {/* Contrôles : sélection mot-clé (dont Moyenne globale) + rapport */}
+        <div className="flex flex-wrap items-center gap-3">
+          <select value={selectedKeywordId} onChange={e => setSelectedKeywordId(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
+            <option value={ALL}>Moyenne globale (toutes les requêtes)</option>
+            {keywords.map(kw => <option key={kw.id} value={kw.id}>{kw.keyword}</option>)}
+          </select>
           <select value={selectedRunId || ''} onChange={e => setSelectedRunId(e.target.value)}
             className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
             {runs.map(r => (
-              <option key={r.id} value={r.id}>
-                {fmtDate(r.createdAt)}{r.has_failures ? ' (partiel)' : ''}
-              </option>
+              <option key={r.id} value={r.id}>{fmtDate(r.createdAt)}{r.has_failures ? ' (partiel)' : ''}</option>
             ))}
           </select>
           {loadingDetail && <Loader2 size={15} className="animate-spin text-accent" />}
@@ -286,6 +272,53 @@ export default function GeogridSuiviPage() {
           <div className="text-sm text-danger bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>
         )}
 
+        {/* Graphe pleine largeur */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-text-primary">
+              Évolution · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
+            </h3>
+            <TrendControls rangePreset={rangePreset} setRangePreset={setRangePreset}
+              granularity={granularity} setGranularity={setGranularity}
+              aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
+          </div>
+          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
+          <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
+        </div>
+
+        {/* Carte pleine largeur */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-text-primary">
+            Carte · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
+            {selectedRun && <span className="font-normal text-text-tertiary"> · {fmtDate(selectedRun.createdAt)}</span>}
+          </h3>
+          {mapLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-accent" /></div>
+          ) : mapData && mapData.points?.length > 0 ? (
+            <>
+              <GeogridMap center={mapData.center} points={mapData.points} heightClass="h-[600px]" />
+              <RankLegend />
+            </>
+          ) : (
+            <p className="text-sm text-text-tertiary py-10 text-center">Aucune donnée cartographique pour ce rapport.</p>
+          )}
+        </div>
+
+        {/* Métriques + concurrents (mode mot-clé uniquement) */}
+        {!isGlobal && scanDetail && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <MetricCard label="Position moyenne (visible)" value={scanDetail.scan.arp ?? '—'} sub="ARP — là où vous apparaissez" />
+              <MetricCard label="Position moyenne (couverture)" value={scanDetail.scan.atrp ?? '—'} sub="ATRP — toute la grille" />
+              <MetricCard label="Part de voix" value={scanDetail.scan.solv != null ? `${Math.round(scanDetail.scan.solv)}%` : '—'} sub="SoLV — points en Top 3" />
+              <MetricCard label="Note de la fiche" value={scanDetail.scan.rating_snapshot ?? '—'}
+                sub={scanDetail.scan.review_count_snapshot != null ? `${scanDetail.scan.review_count_snapshot} avis` : 'au moment du scan'} />
+            </div>
+            <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />
+          </>
+        )}
+
+        {/* Tableau d'évolution par mot-clé (rapport sélectionné) — clic = focus sur ce mot-clé */}
         {runDetail && (
           <div className="bg-white border border-border rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
@@ -302,7 +335,7 @@ export default function GeogridSuiviPage() {
               <tbody className="divide-y divide-border">
                 {runDetail.scans.map(scan => (
                   <tr key={scan.id} onClick={() => setSelectedKeywordId(scan.keyword_id)}
-                    className="cursor-pointer hover:bg-bg-page transition-colors">
+                    className={`cursor-pointer transition-colors ${scan.keyword_id === selectedKeywordId ? 'bg-accent-light/40' : 'hover:bg-bg-page'}`}>
                     <td className="px-5 py-3 text-text-primary font-medium">{scan.keyword}</td>
                     <td className="px-3 py-3 text-text-primary">{scan.atrp ?? '—'}</td>
                     <td className="px-3 py-3 text-text-secondary">{scan.points_top3 ?? '—'}</td>
@@ -317,12 +350,6 @@ export default function GeogridSuiviPage() {
             </table>
           </div>
         )}
-
-        {/* Courbe multi-mots-clés */}
-        <div className="bg-white border border-border rounded-2xl p-5 space-y-4">
-          <TrendControls {...trendControlsProps} />
-          <TrendChart data={chartData} lines={keywords.map((kw, i) => ({ key: kw.keyword, color: LINE_COLORS[i % LINE_COLORS.length] }))} />
-        </div>
       </div>
     </AppLayout>
   )

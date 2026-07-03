@@ -191,6 +191,15 @@ async function getRun(req, res) {
   }
 }
 
+async function runAverageMap(req, res) {
+  try {
+    const result = await scanService.getRunAverageMap(req.params.id, req.query.business_id, req.user.id)
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
 async function getTrend(req, res) {
   try {
     const trend = await scanService.getTrend(req.query.business_id, req.user.id, req.query.keyword_id)
@@ -203,5 +212,5 @@ async function getTrend(req, res) {
 module.exports = {
   create, list, update, remove, quota, preview, createScan, listScans, getScan, refreshScan,
   getConfig, updateConfig, listCompetitors, createCompetitor, removeCompetitor, recomputeCompetitors,
-  detectedCompetitors, competitorsTrend, createRun, listRuns, getRun, getTrend,
+  detectedCompetitors, competitorsTrend, createRun, listRuns, getRun, runAverageMap, getTrend,
 }

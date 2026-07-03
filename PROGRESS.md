@@ -341,6 +341,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G9 | Frontend — Suivi | ✅ Terminé (2026-07-02) | **G9.1** : vue globale (tableau). **G9.2** : courbes (agrégation temporelle). **G9.3** : vue par mot-clé (carte + métriques + tableau concurrents triable) + bascule finale de route, ancienne `GeogridPage` retirée. Voir détail ci-dessous |
 | G10 | Frontend — Concurrents | ✅ Terminé (2026-07-03) | Page `/positionnement/concurrents` : tableau + courbes de comparaison vs concurrents suivis, nouvel endpoint `GET /competitors/trend`. Voir détail ci-dessous |
 | G10.5 | Backend — résilience cron (retry + étalement) | ✅ Terminé (2026-07-03) | Correctif hors-plan suite à un rapport planifié perdu sur blip réseau : retry 3 niveaux (transport/partiel/run) espacés + jitter déterministe, découplage cadence/reprise (migrations 50-52), circuit-breaker, plafond points en vol, saut multi-périodes, hook alerte G11. Voir détail ci-dessous |
+| G10.6 | Frontend — refonte UX Suivi/Concurrents | ✅ Terminé (2026-07-03) | Page Suivi unifiée : sélecteur mot-clé (dont « Moyenne globale ») pilotant grand graphe + grande carte, clic-jour sur la courbe → carte, heatmap moyenne globale (endpoint `GET /runs/:id/average-map`). Même gabarit sur Concurrents. Voir détail ci-dessous |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien ; **consommer `geogrid_runs.notify_failure`** (hook posé en G10.5) |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
 
@@ -659,6 +660,23 @@ Prochaine session : **G11 — Rapport email (v1)**.
 
 Prochaine session : **G11 — Rapport email (v1)** (dont la consommation du hook `notify_failure`).
 
+### Détail session G10.6 — Frontend : refonte UX Suivi + Concurrents (2026-07-03)
+
+Demande utilisateur : fusionner le Suivi en **une seule vue** — grand graphe + grande carte pleine largeur — pilotés par un **sélecteur de mot-clé commun**, avec sélection du jour **au clic sur le graphe**. 3 décisions produit validées (AskUserQuestion) : sélection **un mot-clé à la fois** (dont « Moyenne globale »), carte moyenne globale = **heatmap de rang moyen par point**, blocs métriques/tableaux **conservés** sous la carte.
+
+**Backend** — 1 endpoint : `GET /rank-tracking/runs/:id/average-map` (`getRunAverageMap`) → heatmap moyenne d'un rapport : rang moyen par point de grille sur tous les scans terminés (absent imputé à `NOT_RANKED=21`, moyenne ≥ 21 → `rank:null`). Renvoie `{ center, points }` au format exact de `GeogridMap`. Vérifié sur le rapport réel du jour (49 points, 18 avec moyenne < 21, plage 7-20).
+
+**Frontend :**
+- `GeogridMap.jsx` : prop `heightClass` (mode plein écran `h-[600px]`).
+- `lib/geogrid-trend.js` : export de `bucketKeyOf` (mappe un clic-graphe → clé de bucket → rapport).
+- `GeogridTrendChart.jsx` : props `onDayClick` (clic sur un point → `payload` du bucket) et `height`.
+- `GeogridSuiviPage.jsx` — **refonte complète** : fin de la scission vue globale/vue par mot-clé. Sélecteur mot-clé (`''` = Moyenne globale + chaque mot-clé) pilotant graphe **et** carte ; grand graphe (5 courbes en global, 1 en mot-clé ; `onDayClick` → `selectedRunId`) ; grande carte (heatmap du mot-clé via `getScan`, ou moyenne globale via le nouvel endpoint) ; métriques ARP/ATRP/SoLV/note + tableau concurrents en mode mot-clé ; tableau d'évolution (clic ligne → focus mot-clé). Mapping clic-jour : clé de bucket (`scanned_at`) → run le plus récent du bucket (net en granularité Jour).
+- `GeogridConcurrentsPage.jsx` — même gabarit : grand graphe de comparaison (ma fiche + concurrents, `onDayClick`) + grande carte (ma heatmap) + tableau, réutilisant `scanDetail.points` déjà chargé.
+
+**Vérifié en preview réel** (viewport headless à 0 au départ → résolu par `preview_resize` + reload, pas un bug appli) : Suivi mode global (5 courbes + légende + endpoint average-map), mode mot-clé (1 courbe + carte + métriques ARP/ATRP/SoLV + tableau concurrents), changement de rapport pilote carte + métriques (ATRP immobilier 15.27 le 2 juillet, cohérent avec l'historique) ; Concurrents (4 courbes ma fiche+3 concurrents + carte + tableau), zéro erreur console. Le **clic-jour** est câblé (`onDayClick` → `selectedRunId`, moitié aval vérifiée) ; la simulation d'événements internes Recharts est impossible en headless (même limite que le rendu Google Maps), à confirmer en vrai navigateur.
+
+Prochaine session : **G11 — Rapport email (v1)**.
+
 ---
 
 ## PHASE 12 — SUIVI DES AVIS DE LA CONCURRENCE *(post-MVP, cadré 2026-07-03)*
@@ -668,8 +686,8 @@ Prochaine session : **G11 — Rapport email (v1)** (dont la consommation du hook
 | # | Session | Statut | Notes |
 |---|---------|--------|-------|
 | AC1 | Backend — données & synchro | ✅ Terminé (2026-07-03) | Migrations 47-49 (`competitor_reviews`, `review_competitor_tracking`, `review_sync_jobs.competitor_place_id`), modèles, réconciliation (`reconcileCompetitorTracking`) depuis `geogrid_competitors`, `enqueueDueCompetitors`/`enqueueSyncForCompetitor` (cadence fixe `REVIEWS_COMPETITOR_INTERVAL_MINUTES`=1440), `resolveJob` scindé (`resolveLocationJob`/`resolveCompetitorJob`, poll `tasks_ready` unifié). Voir détail ci-dessous |
-| AC2 | Backend — stats mensuelles | ⬜ À faire | `GET /reviews/competitors/stats` (agrégat SQL, complétude, série « ma fiche ») |
-| AC3 | Frontend — page Concurrents (avis) | ⬜ À faire | Sidebar AVIS > Concurrents, gestion + carte « Ce mois-ci » + courbe (TrendChart étendu, axe Y normal) + tableau + année |
+| AC2 | Backend — stats mensuelles | ✅ Terminé (2026-07-03) | Migration 50 (`locations.total_reviews_count`/`avg_rating`, symétrique côté "ma fiche"), `GET /reviews/competitors/stats` (`getCompetitorStats` : agrégat SQL par mois, règle de complétude, série « ma fiche » + concurrents, `available_years`). Voir détail ci-dessous |
+| AC3 | Frontend — page Concurrents (avis) | ✅ Terminé (2026-07-03) — **module complet** | Sidebar AVIS > Concurrents (`/reviews/concurrents`), gestion (PlaceSearch + détectés + quota 3/5/10), carte « Ce mois-ci » (`MetricCard`), courbe 12 mois (`TrendChart` étendu par props `yReversed`/`yLabel`), tableau mensuel (meilleur du mois surligné, mois incomplets en italique), sélecteur d'année. Backend : gating + `triggerCompetitorSync` (backfill priority ~1 min à l'ajout). Voir détail ci-dessous |
 
 ### Détail session AC1 — Backend données & synchro (2026-07-03)
 
@@ -680,6 +698,32 @@ Prochaine session : **G11 — Rapport email (v1)** (dont la consommation du hook
 **Synchro** : `enqueueSyncForCompetitor` soumet une tâche DataForSEO avec le `place_id` **du concurrent** et `location_coordinate` = coordonnées de **notre** localisation (même piège que session 21). `hasActiveJob` étendu à `(locationId, competitorPlaceId=null)` — un job concurrent en cours ne bloque plus la synchro de la fiche elle-même, ni les autres concurrents. `pollRunningJobs`/`resolveJob` unifiés : un seul `tasks_ready` partagé, branche sur `competitor_place_id` vers `resolveCompetitorJob` (upsert `competitor_reviews`, snapshot `total_reviews_count`/`avg_rating` du dernier lot, garde-fou saturation incrémentale identique à session 21).
 
 **Vérifié en conditions réelles** (3 vrais concurrents Atlasimmobilier/Marrakech, déjà suivis depuis G7) : le backend tournant en `nodemon` a **auto-rechargé le nouveau code et exécuté le flux de bout en bout automatiquement** dès l'écriture des fichiers — réconciliation → 3 lignes créées → 3 jobs backfill soumis (place_id concurrent + coordonnées Atlas acceptés par DataForSEO, **question ouverte §9 tranchée**) → **175 vrais avis concurrents importés** (12+140+23, $0.045 total, coût conforme au tarif standard depth 200). Isolation vérifiée : 0 interférence avec les jobs "ma fiche" (64 avis, inchangés). Aucune donnée de test à nettoyer (concurrents et avis 100 % réels).
+
+### Détail session AC2 — Stats mensuelles (2026-07-03)
+
+**Migration 50 (`locations.total_reviews_count`/`avg_rating`)** : la règle de complétude (§2.6 du cahier — "s'applique aussi à la série ma fiche") exige un total connu pour la fiche elle-même, symétrique à `review_competitor_tracking`. Capturé dans `resolveLocationJob` (comme `resolveCompetitorJob` le fait déjà pour un concurrent). ⚠️ Collision de numérotation bénigne avec la session retry du geogrid (elle aussi `20260703000050-*`, tables différentes, les deux ont migré sans conflit — Sequelize suit par nom de fichier complet).
+
+**`getCompetitorStats(businessId, userId, locationId, year)`** : 4 requêtes SQL brutes (`sequelize.query`, replacements nommés) — mensuel + totaux pour "me" (`reviews`), mensuel + totaux pour les concurrents en une seule requête chacune (`place_id IN (:placeIds)`, sautée si aucun concurrent suivi). `complete_from` par série : mois ≤ au plus ancien avis stocké sont signalés potentiellement incomplets, sauf si `stored_count >= total_reviews_count` (snapshot API) — la fonction renvoie toujours 12 mois avec leur compte réel, c'est au frontend (AC3) de griser visuellement.
+
+**Vérification empirique du risque fuseau horaire** (au lieu de supposer) : sondé en direct contre la vraie connexion Postgres de l'app — `SHOW timezone` → session **UTC** confirmée, et test croisé d'un avis à la frontière d'un mois (`date_trunc('month', '2026-01-31T23:30:00Z')` → `2026-01-01T00:00:00Z`, correct). Un correctif `AT TIME ZONE 'UTC'` envisagé aurait en réalité **introduit** un décalage d'un jour (`2025-12-31T23:00:00Z`, testé et rejeté) — code laissé tel quel, commenté pour dissuader une "correction" future erronée.
+
+**2 findings de la revue adversariale (3 angles : dates/SQL, isolation, cas limites)** : le finding "fuseau horaire" (sévérité haute) reposait sur une hypothèse de fuseau non-UTC — invalidé par la vérification empirique ci-dessus, aucun changement de code. Le finding "`available_years` peut exclure l'année demandée si elle précède toutes les données" (sévérité moyenne) était réel — corrigé (l'année demandée est désormais toujours incluse dans la plage). Durcissement additionnel : `business_id` ajouté explicitement aux requêtes `competitor_reviews` (déjà sûr via `location_id` pré-vérifié, mais conforme à la règle CLAUDE.md "isolation stricte à chaque requête").
+
+**Vérifié en conditions réelles** contre les données AC1 (Atlasimmobilier, 2 localisations distinctes — 39+25 avis "ma fiche" répartis dessus, 3 concurrents sur l'une d'elles) : agrégats mensuels 2025/2026 cohérents avec les vraies dates, `complete_from` correct dans les deux cas (`null` si backfill prouvé complet, sinon mois du plus ancien avis), fallback année invalide (`abc`) → année courante sans planter, localisation sans concurrent → série "me" seule sans requête SQL invalide, fix `available_years` confirmé (année 2019 hors plage de données bien incluse).
+
+### Détail session AC3 — Frontend page Concurrents (2026-07-03) — **module complet**
+
+**Backend (petit complément)** : gating (`getReviewsQuota`) ajouté à `getCompetitorStats` (absent d'AC2, nécessaire pour l'état "non inclus dans votre plan" du frontend) ; `last_synced_at` ajouté aux séries (`buildSeries` + sites d'appel) ; nouvelle fonction `triggerCompetitorSync(businessId, userId, locationId, placeId)` — réconcilie puis soumet un backfill **priority** (~1 min) pour un concurrent tout juste ajouté (symétrique à `triggerSync` pour "ma fiche"), route `POST /reviews/competitors/sync`.
+
+**`ReviewsConcurrentsPage.jsx`** (`/reviews/concurrents`, sidebar AVIS) : bloc gestion (compteur quota `x/y` partagé avec le positionnement, `PlaceSearch` + suggestions détectées, liste avec note/total/dernière synchro/statut synchro en cours, suppression), carte « Ce mois-ci » (`MetricCard`, delta vs meilleur concurrent), sélecteur d'année, courbe 12 mois, tableau mensuel. `TrendChart` (`GeogridTrendChart.jsx`) étendu par props `yReversed`/`yLabel` (défauts inchangés = zéro régression sur les pages Positionnement).
+
+**4 findings de la revue adversariale (contrat de données/logique JS — les 2 autres angles, régression et isolation/gating, n'ont rien trouvé), tous confirmés réels en relisant le code** :
+1. Fetch redondant au chargement initial (le garde-fou par ref ne bloquait que le tout premier passage, pas la transition `year: null → valeur`) — corrigé en comparant directement `stats.year === year` (plus besoin de ref).
+2. `currentMonthLabel` en fuseau local au lieu d'UTC (incohérent avec les labels du backend) — corrigé (accesseurs UTC).
+3. Boucle de poll après ajout d'un concurrent sans `try/catch` par itération — un raté réseau transitoire faisait remonter une erreur alors que l'ajout avait réussi — corrigé (retry silencieux par tour).
+4. **Collision de clé de courbe pour des concurrents homonymes** (`s.name` utilisé comme clé de données ET clé React) — pas un cas théorique : « Guy Hoquet », une enseigne en franchise, est un des 3 vrais concurrents suivis. Corrigé en étendant `TrendChart` : `dataKey`/`key` = `s.key` (place_id, toujours unique), nouveau prop `label` séparé pour l'affichage (légende/infobulle) — rétrocompatible (défaut `label || key`).
+
+**Vérifié en conditions réelles** : redémarrage backend nécessaire en cours de vérif (l'ancien process servait du code d'avant le fix `last_synced_at`, symptôme repéré car "dernière synchro : jamais" pour 3 concurrents dont la base avait pourtant la vraie date — jamais fait confiance à l'écran sans vérifier la donnée réelle en base). Après redémarrage : page testée en preview avec les vraies données Atlasimmobilier — quota 3/3 correctement bloquant (« Limite de votre plan atteinte »), 3 concurrents affichés avec note/total/date réels, carte "Ce mois-ci" cohérente, courbe à **4 lignes** rendue sans collision (légende avec les 4 noms distincts, dont Guy Hoquet), tableau correct. Non-régression confirmée sur `/positionnement/suivi` (label "Position" intact, aucune erreur console). `ResponsiveContainer` de Recharts a mis ~2s à se mesurer en preview headless (comportement déjà documenté sur ce projet, pas un bug — confirmé identique sur les pages positionnement existantes).
 
 ## Références techniques critiques
 

@@ -27,6 +27,7 @@ router.post('/scans/:id/refresh', ctrl.refreshScan)
 
 router.post('/runs',     ctrl.createRun)
 router.get('/runs',      ctrl.listRuns)
+router.get('/runs/:id/average-map', ctrl.runAverageMap)
 router.get('/runs/:id',  ctrl.getRun)
 
 router.get('/trend', ctrl.getTrend)
