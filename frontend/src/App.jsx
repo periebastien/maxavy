@@ -21,8 +21,9 @@ import WidgetsPage from './pages/WidgetsPage'
 import WidgetBuilderPage from './pages/WidgetBuilderPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
-const GeogridConfigPage = lazy(() => import('./pages/GeogridConfigPage'))
-const GeogridSuiviPage  = lazy(() => import('./pages/GeogridSuiviPage'))
+const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
+const GeogridSuiviPage       = lazy(() => import('./pages/GeogridSuiviPage'))
+const GeogridConcurrentsPage = lazy(() => import('./pages/GeogridConcurrentsPage'))
 
 function RequireBusiness({ children }) {
   const { isLoading: authLoading } = useAuth()
@@ -64,6 +65,7 @@ export default function App() {
       <Route path="/widgets/:id"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement/configuration" element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridConfigPage /></Suspense></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement/suivi"          element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridSuiviPage /></Suspense></RequireBusiness></PrivateRoute>} />
+      <Route path="/positionnement/concurrents"    element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><GeogridConcurrentsPage /></Suspense></RequireBusiness></PrivateRoute>} />
       <Route path="/positionnement"                element={<Navigate to="/positionnement/configuration" replace />} />
       <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />

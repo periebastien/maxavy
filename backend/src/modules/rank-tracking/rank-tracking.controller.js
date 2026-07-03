@@ -110,6 +110,15 @@ async function detectedCompetitors(req, res) {
   }
 }
 
+async function competitorsTrend(req, res) {
+  try {
+    const trend = await competitorService.trend(req.query.business_id, req.user.id, req.query.keyword_id)
+    res.json(trend)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
 async function preview(req, res) {
   try {
     const grid = await service.previewGrid(req.query.business_id, req.user.id, req.query)
@@ -194,5 +203,5 @@ async function getTrend(req, res) {
 module.exports = {
   create, list, update, remove, quota, preview, createScan, listScans, getScan, refreshScan,
   getConfig, updateConfig, listCompetitors, createCompetitor, removeCompetitor, recomputeCompetitors,
-  detectedCompetitors, createRun, listRuns, getRun, getTrend,
+  detectedCompetitors, competitorsTrend, createRun, listRuns, getRun, getTrend,
 }

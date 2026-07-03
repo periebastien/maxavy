@@ -48,7 +48,7 @@ const sections = [
     items: [
       { label: 'Configuration', to: '/positionnement/configuration', icon: Settings2 },
       { label: 'Suivi', to: '/positionnement/suivi', icon: LineChart },
-      { label: 'Concurrents', to: '/positionnement/concurrents', icon: Swords, soon: true },
+      { label: 'Concurrents', to: '/positionnement/concurrents', icon: Swords },
     ]
   },
   {

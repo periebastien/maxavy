@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { MapPin, Loader2, Lock, ArrowUp, ArrowDown, Minus, FileSearch, ArrowLeft, Star } from 'lucide-react'
+import { MapPin, Loader2, Lock, ArrowUp, ArrowDown, Minus, FileSearch, ArrowLeft } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import MetricCard from '../components/common/MetricCard'
 import GeogridMap from '../components/GeogridMap'
+import CompetitorTable from '../components/GeogridCompetitorTable'
+import { TrendControls, TrendChart, LINE_COLORS } from '../components/GeogridTrendChart'
 import { RANK_LEGEND } from '../lib/geogrid'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
-import { RANGE_PRESETS, GRANULARITIES, AGG_MODES, filterByRange, bucketize, mergeSeriesForChart } from '../lib/geogrid-trend'
-
-// Palette cyclique pour les lignes du graphe multi-mots-clés (cycle si plus de mots-clés que de couleurs).
-const LINE_COLORS = ['#7C5CFC', '#1D9E75', '#E8833B', '#3B82F6', '#E24B4A', '#0EA5A5', '#D946A8', '#84931D']
+import { filterByRange, bucketize, mergeSeriesForChart } from '../lib/geogrid-trend'
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -37,98 +35,6 @@ function round2(n) { return Math.round(n * 100) / 100 }
 function fmtNum(n) {
   const r = round2(n)
   return (Number.isInteger(r) ? r : r.toFixed(1)).toString().replace('.', ',')
-}
-
-// Réglages de courbe (§4.2) — partagés entre la vue globale (multi-mots-clés) et la vue par mot-clé.
-function TrendControls({ rangePreset, setRangePreset, granularity, setGranularity, aggMode, setAggMode, loading }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <select value={rangePreset} onChange={e => setRangePreset(e.target.value)}
-        className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
-        {RANGE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-      </select>
-      <select value={granularity} onChange={e => setGranularity(e.target.value)}
-        className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
-        {GRANULARITIES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-      </select>
-      <select value={aggMode} onChange={e => setAggMode(e.target.value)}
-        className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
-        {AGG_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-      </select>
-      {loading && <Loader2 size={15} className="animate-spin text-accent" />}
-    </div>
-  )
-}
-
-// data : sortie de mergeSeriesForChart. lines : [{ key, color }] — 1 par mot-clé affiché (1 en vue détail).
-function TrendChart({ data, lines }) {
-  if (!data.length) return <p className="text-sm text-text-tertiary text-center py-10">Pas encore assez de données pour tracer une courbe.</p>
-  return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF2" />
-        <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6B6B78' }} />
-        <YAxis reversed allowDecimals={false} tick={{ fontSize: 12, fill: '#6B6B78' }}
-          label={{ value: 'Position', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B6B78' } }} />
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        {lines.map(l => (
-          <Line key={l.key} type="monotone" dataKey={l.key} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
-
-// Tableau triable « ma fiche + concurrents » (§8.2) — tri par défaut sur le mieux positionné (position
-// moyenne croissante, ATRP = rang donc plus bas = mieux). Un seul clic sur l'en-tête inverse le tri.
-function CompetitorTable({ scan, competitors }) {
-  const [sortDir, setSortDir] = useState('asc')
-  const rows = [
-    { id: 'fiche', name: 'Ma fiche', isFiche: true, avgPosition: scan.atrp, top3: scan.points_top3, top10: scan.points_top10, top20: scan.points_top20 },
-    ...competitors.map(c => ({
-      id: c.id, name: c.name || c.place_id, isFiche: false,
-      avgPosition: c.avg_position != null ? Number(c.avg_position) : null,
-      top3: c.points_top3, top10: c.points_top10, top20: c.points_top20,
-    })),
-  ].sort((a, b) => {
-    const av = a.avgPosition ?? 999, bv = b.avgPosition ?? 999
-    return sortDir === 'asc' ? av - bv : bv - av
-  })
-
-  return (
-    <div className="bg-white border border-border rounded-2xl overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs font-medium text-text-secondary">
-            <th className="px-5 py-3">Fiche</th>
-            <th className="px-3 py-3 cursor-pointer select-none hover:text-text-primary transition-colors"
-              onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}>
-              Position moyenne {sortDir === 'asc' ? '↑' : '↓'}
-            </th>
-            <th className="px-3 py-3">Top 3</th>
-            <th className="px-3 py-3">Top 10</th>
-            <th className="px-3 py-3">Top 20</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {rows.map(r => (
-            <tr key={r.id} className={r.isFiche ? 'bg-accent-light/40' : ''}>
-              <td className="px-5 py-3 font-medium text-text-primary">
-                {r.isFiche ? (
-                  <span className="inline-flex items-center gap-1.5"><Star size={13} className="text-accent fill-accent" /> {r.name}</span>
-                ) : r.name}
-              </td>
-              <td className="px-3 py-3 text-text-primary">{r.avgPosition ?? '—'}</td>
-              <td className="px-3 py-3 text-text-secondary">{r.top3 ?? '—'}</td>
-              <td className="px-3 py-3 text-text-secondary">{r.top10 ?? '—'}</td>
-              <td className="px-3 py-3 text-text-secondary">{r.top20 ?? '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
 }
 
 export default function GeogridSuiviPage() {

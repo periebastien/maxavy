@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   MapPin, Loader2, Lock, LayoutGrid, Search, CalendarClock, Swords, Square, Circle, RotateCcw,
   Trash2, Plus, Clock, Globe, CheckCircle2, ArrowRight,
@@ -66,6 +66,7 @@ function pointDistM(center, p) {
 
 export default function GeogridConfigPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { activeBusiness } = useBusiness()
   const { activeLocation } = useLocations() || {}
 
@@ -155,7 +156,12 @@ export default function GeogridConfigPage() {
 
           // Localisation déjà configurée (≥1 mot-clé) : on saute directement au récap, avec accès libre
           // à toutes les étapes pour modifier — plus naturel qu'un retour au wizard linéaire à chaque fois.
-          if (kws.length > 0) setStep(5)
+          // ?step=N (ex. lien "Gérer les concurrents" depuis la page Concurrents, §9) saute directement
+          // à l'étape demandée plutôt que de repasser par le récap.
+          if (kws.length > 0) {
+            const requested = Number(searchParams.get('step'))
+            setStep(requested >= 1 && requested <= 5 ? requested : 5)
+          }
         }
       })
       .catch(e => { if (!cancelled) setError(e.message) })

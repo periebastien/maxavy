@@ -339,7 +339,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G7 | Backend — concurrents & agrégats | ✅ Terminé (2026-07-02) | CRUD concurrents + quota par config, agrégats fiche+concurrents (top 3/10/20), `MAX_COMPETITORS` 5→20, endpoints `config`/`competitors`/`runs`/`trend`, quota mots-clés/concurrents passé **par localisation**. Voir détail ci-dessous |
 | G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
 | G9 | Frontend — Suivi | ✅ Terminé (2026-07-02) | **G9.1** : vue globale (tableau). **G9.2** : courbes (agrégation temporelle). **G9.3** : vue par mot-clé (carte + métriques + tableau concurrents triable) + bascule finale de route, ancienne `GeogridPage` retirée. Voir détail ci-dessous |
-| G10 | Frontend — Concurrents | ⬜ À faire | Page de comparaison + courbes |
+| G10 | Frontend — Concurrents | ✅ Terminé (2026-07-03) | Page `/positionnement/concurrents` : tableau + courbes de comparaison vs concurrents suivis, nouvel endpoint `GET /competitors/trend`. Voir détail ci-dessous |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
 
@@ -615,7 +615,30 @@ Nouveau fichier `pages/GeogridSuiviPage.jsx`, câblé sur une **route de dev tem
 
 **Vérifié en preview réel** sur la vraie route `/positionnement/suivi` (pas la route de dev) : Vue Globale (tableau 5 mots-clés), clic → Vue Par Mot-Clé (ARP 11.50 / ATRP 20.61 / SoLV 0% / note 4.6, carte rendue, tableau concurrents trié correctement), bouton Retour → Vue Globale. ⚠️ Une erreur React (`error boundary` générique) est apparue une fois juste après l'édition de route + suppression du fichier, avant tout rechargement — un `window.location.reload()` l'a fait disparaître définitivement (état HMR périmé après suppression de fichier + édition de route pendant la même session Vite, pas un bug du code livré).
 
-**Fin de G9** (3/3 sous-sessions). **Prochaine session : G10 — Frontend Concurrents** (page de comparaison dédiée + courbes, cf. `PLAN_SESSIONS.md` Phase 11).
+**Fin de G9** (3/3 sous-sessions). **Prochaine session initialement : G10.** Faite dans la foulée (2026-07-03) — voir détail ci-dessous.
+
+### Détail session G10 — Frontend : page Concurrents (2026-07-03)
+
+**Backend** — `competitor.service.js` : nouvelle fonction `trend(businessId, userId, keywordId)`, exposée en `GET /competitors/trend?keyword_id=X`. Renvoie, pour chaque concurrent actif de la config du mot-clé, sa série `avg_position` **alignée sur les mêmes scans (mêmes dates) que `GET /trend`** — ainsi les deux se bucketisent/fusionnent ensemble côté front sans réconciliation de dates (`null` pour un scan où le concurrent n'a pas encore de ligne `GeogridScanCompetitor`, ex. ajouté après coup sans recompute). C'était la seule pièce manquante : le reste (agrégats par scan, tableau triable) existait déjà depuis G7/G9.3.
+
+**Extraction de composants partagés** (nécessaire : `CompetitorTable`/`TrendControls`/`TrendChart` vivaient en local dans `GeogridSuiviPage.jsx`, non réutilisables tels quels) :
+- `components/GeogridCompetitorTable.jsx` — tableau triable « ma fiche + concurrents », inchangé au comportement près.
+- `components/GeogridTrendChart.jsx` — `TrendControls` + `TrendChart` + palette `LINE_COLORS`.
+- `GeogridSuiviPage.jsx` mis à jour pour importer ces deux fichiers au lieu de les définir localement (zéro changement de comportement — vérifié par non-régression complète, voir plus bas).
+
+**Nouvelle page** `pages/GeogridConcurrentsPage.jsx` (`/positionnement/concurrents`) : sélecteur mot-clé + sélecteur rapport → `CompetitorTable` réutilisé ; courbe de comparaison multi-séries (ma fiche + 1 ligne par concurrent, mêmes réglages plage/granularité/agrégation que Suivi) via `TrendControls`/`TrendChart` réutilisés + `GET /trend` (ma fiche) et `GET /competitors/trend` (concurrents) fusionnés avec `bucketize`/`mergeSeriesForChart` existants (aucune modif de `lib/geogrid-trend.js`). Lien « Gérer les concurrents » → `/positionnement/configuration?step=4`.
+
+**Petit ajout ciblé sur le wizard** : `GeogridConfigPage.jsx` lit désormais `?step=N` (`useSearchParams`) pour sauter directement à l'étape demandée sur une fiche déjà configurée, au lieu de toujours atterrir sur le récap — sert le lien « Gérer les concurrents » ci-dessus (retour direct à l'étape 4, §9 du cahier).
+
+**États de garde** (même esprit que Suivi) : pas de rapport → renvoie à la Configuration ; rapport(s) mais **aucun concurrent suivi** → état vide dédié avec lien direct vers l'étape 4 (évite un tableau techniquement valide mais inutile avec la seule ligne « Ma fiche »).
+
+**Sidebar** : entrée « Concurrents » passée de texte grisé (`soon: true`) à vrai lien, comme Suivi en G8/G9.
+
+**Bug pré-existant corrigé au passage** : `.claude/launch.json` — la config `locagain-backend` n'avait pas de `cwd`, donc `preview_start` cherchait `package.json` à la racine du repo au lieu de `backend/`. Ajout de `"cwd": "backend"`.
+
+**Vérifié en preview réel** (comptes/données réelles, backend + frontend redémarrés) : tableau et courbe de comparaison avec les vraies données (Guy Hoquet 8.96, Ma fiche 20.61 sur « agence immobilière » — cohérent avec G9.3), changement de mot-clé recharge bien tableau + courbe (vérifié sur « immobilier », Ma fiche 15.27 — cohérent avec Vue Globale de Suivi), lien « Gérer les concurrents » atterrit bien directement sur l'étape 4 du wizard. **Non-régression complète de `GeogridSuiviPage`** après extraction des composants partagés : Vue Globale et Vue Par Mot-Clé re-testées avec les mêmes données réelles, valeurs identiques à avant (20.61/15.27/20.71/18.57/21.00, ARP 11.50/ATRP 20.61 en vue détail) — aucune régression. Note : le rapport le plus récent (marqué « partiel ») affiche des tirets partout sur les deux pages (Suivi et Concurrents) — cohérent avec un rapport dont les scans ont échoué, pas un bug introduit ici.
+
+Prochaine session : **G11 — Rapport email (v1)**.
 
 ---
 

@@ -218,4 +218,42 @@ async function detected(businessId, userId, configId) {
     .slice(0, 30)
 }
 
-module.exports = { list, create, remove, recompute, detected, computeAndStoreForScan }
+// Séries temporelles des concurrents suivis pour un mot-clé (courbe de comparaison G10, §9) — mêmes
+// scans (mêmes dates) que getTrend() (scan.service.js), pour que les deux se bucketisent/fusionnent
+// ensemble côté front sans réconciliation de dates. avg_position à null pour un scan où le concurrent
+// n'a pas encore de ligne (ex. ajouté après coup, recompute pas encore lancé) — Recharts saute le point.
+async function trend(businessId, userId, keywordId) {
+  await ensureAccess(businessId, userId)
+  if (!UUID_RE.test(keywordId || '')) throw { status: 404, message: 'Mot-clé introuvable' }
+  const keyword = await GeogridKeyword.findOne({ where: { id: keywordId, business_id: businessId } })
+  if (!keyword) throw { status: 404, message: 'Mot-clé introuvable' }
+  if (!keyword.config_id) return []
+
+  const competitors = await GeogridCompetitor.findAll({ where: { config_id: keyword.config_id, active: true } })
+  if (!competitors.length) return []
+
+  const scans = await GeogridScan.findAll({
+    where: { keyword_id: keywordId, status: 'done' },
+    attributes: ['id', 'scanned_at'],
+    order: [['scanned_at', 'ASC']],
+  })
+  if (!scans.length) return competitors.map(c => ({ place_id: c.place_id, name: c.name, series: [] }))
+
+  const rows = await GeogridScanCompetitor.findAll({
+    where: { scan_id: { [Op.in]: scans.map(s => s.id) }, place_id: { [Op.in]: competitors.map(c => c.place_id) } },
+    attributes: ['scan_id', 'place_id', 'avg_position'],
+  })
+  const byPlaceId = new Map(competitors.map(c => [c.place_id, new Map()]))
+  for (const r of rows) byPlaceId.get(r.place_id)?.set(r.scan_id, Number(r.avg_position))
+
+  return competitors.map(c => ({
+    place_id: c.place_id,
+    name: c.name,
+    series: scans.map(s => ({
+      scanned_at: s.scanned_at,
+      avg_position: byPlaceId.get(c.place_id).has(s.id) ? byPlaceId.get(c.place_id).get(s.id) : null,
+    })),
+  }))
+}
+
+module.exports = { list, create, remove, recompute, detected, computeAndStoreForScan, trend }

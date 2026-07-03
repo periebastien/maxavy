@@ -13,6 +13,7 @@
       "name": "locagain-backend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
+      "cwd": "backend",
       "port": 3000
     }
   ]
