@@ -340,7 +340,8 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G8 | Frontend — Configuration (wizard) | ✅ Terminé (2026-07-02) | **G8.1** : squelette + Étape Grille. **G8.2** : Étapes Mots-clés + Planning. **G8.3** : Étape Concurrents + récap + premier rapport + mode édition. Voir détail ci-dessous |
 | G9 | Frontend — Suivi | ✅ Terminé (2026-07-02) | **G9.1** : vue globale (tableau). **G9.2** : courbes (agrégation temporelle). **G9.3** : vue par mot-clé (carte + métriques + tableau concurrents triable) + bascule finale de route, ancienne `GeogridPage` retirée. Voir détail ci-dessous |
 | G10 | Frontend — Concurrents | ✅ Terminé (2026-07-03) | Page `/positionnement/concurrents` : tableau + courbes de comparaison vs concurrents suivis, nouvel endpoint `GET /competitors/trend`. Voir détail ci-dessous |
-| G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien |
+| G10.5 | Backend — résilience cron (retry + étalement) | ✅ Terminé (2026-07-03) | Correctif hors-plan suite à un rapport planifié perdu sur blip réseau : retry 3 niveaux (transport/partiel/run) espacés + jitter déterministe, découplage cadence/reprise (migrations 50-52), circuit-breaker, plafond points en vol, saut multi-périodes, hook alerte G11. Voir détail ci-dessous |
+| G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien ; **consommer `geogrid_runs.notify_failure`** (hook posé en G10.5) |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
 
 > **Dépendances front à ajouter** au dev : lib carte (Google Maps déjà chargé via `@googlemaps/js-api-loader` — sinon Leaflet) + lib chart (aucune présente).
@@ -640,7 +641,45 @@ Nouveau fichier `pages/GeogridSuiviPage.jsx`, câblé sur une **route de dev tem
 
 Prochaine session : **G11 — Rapport email (v1)**.
 
+### Détail session G10.5 — Backend : résilience du cron (retry + étalement) (2026-07-03)
+
+**Déclencheur (diagnostic réel en base)** : le rapport hebdo d'Atlasimmobilier (vendredi 08:00 Casablanca) planifié correctement (`next_run_at` juste) mais **perdu** : le backend n'était pas allumé à 07:00 UTC ; au reboot (08:41) le run s'est lancé mais ses 5 scans ont tous échoué en `DataForSEO injoignable : fetch failed` (blip **transport**, pas une erreur métier — le run manuel de la veille avec les mêmes identifiants avait marché). Or `next_run_at` était avancé à vendredi suivant **avant** le scan → une semaine perdue pour un aléa réseau, sans reprise.
+
+**Conception** : passe multi-agents (7 recon en parallèle + designs stress-testés). La relecture adverse a trouvé 6 trous dans la 1ʳᵉ ébauche (re-facturation par recréation de scan, clôture/alerte prématurée, `tasks_ready` non fiable pour la récup, dérive multi-périodes, downgrade non re-vérifié…) — tous intégrés dans la version livrée.
+
+**Principe** : découpler la **cadence** (`geogrid_configs.next_run_at`, jamais touchée par une reprise) de l'**état de reprise** (colonnes séparées, tout en DB → survit au redémarrage). Détail architectural : `GEOGRID_REFONTE_FR.md §7.1`.
+
+**Migrations 50-52** (additives) : `geogrid_scans.{attempts,next_attempt_at,retry_reason}` + index partiel ; `geogrid_runs.{attempts,next_attempt_at,notify_failure}` + index partiel ; statut `retry_pending` ajouté aux 2 enums (`ADD VALUE IF NOT EXISTS`, PG 16). ⚠️ Collision de numérotation bénigne : la session avis a aussi un `20260703000050-*` (tables différentes, les deux ont migré).
+
+**Code** : nouveau `retry.utils.js` (`hashOffset` copié de la sync avis + `computeBackoffMs`) ; `schedule.utils.js` +`computeNextRunAtSkipping` (saut des périodes ratées) ; `dataforseo.provider.js` (distinction transport/métier via `err.transient`, retry court sur GET idempotents seulement) ; `scan.service.js` (primitive `postScanTasks` anti-double-POST, `scheduleScanRetry`, `relaunchDueRetryScans/Runs`, circuit-breaker en mémoire, `pointsInFlight`, `closeFinishedRuns` avec Level C + `notify_failure`, `failStuckScans` conscient de la récupération, ordre `next_run_at` corrigé) ; `scan-geogrid.js` (tick : 2 passes de reprise + portes anti-surcharge circuit/points-en-vol) ; `rank-tracking.config.js` + `.env.example` (9 nouveaux paramètres).
+
+**3 niveaux de reprise** : **A** scan transport (0 tâche postée) → re-submit **en place**, backoff 10/30/90 min + jitter, max 3 ; **B** partiel/timeout (tâches payées) → re-poll **direct** `task_get`, coût 0 $, fenêtre 6 h ; **C** run inexploitable → replanification (backoff 30/120 min, max 2). Étalement : jitter déterministe (anti-rafale au retry) + plafond points en vol (protège la file 1000) + circuit-breaker (pause sur échecs transport en série).
+
+**Vérifié** (règle projet : vraie base, jamais de mock) : unitaires isolés `retry.utils` (14/14) et `computeNextRunAtSkipping` (5/5, dont le cas « backend éteint 3 semaines » → 1 seul rattrapage) ; **test contrôlé Level A** (12/12, provider monkeypatché, injection échec transport puis succès) prouvant reprise en place **sans scan dupliqué**, **sans double facturation** (0 re-POST quand déjà posté), run non clôturé tant qu'un scan est `retry_pending`, crédits comptés une fois ; **test Level C/circuit/annulation** (10/10) : reprise annulée si suivi désactivé (0 crédit), circuit ouvert après N échecs, `closeFinishedRuns` replanifie puis clôture avec `notify_failure`. Toutes les passes du tick exécutées sur la vraie base sans erreur ni lancement. Données de test nettoyées, backend redémarré propre (aucun scan dû → aucun coût réel).
+
+Prochaine session : **G11 — Rapport email (v1)** (dont la consommation du hook `notify_failure`).
+
 ---
+
+## PHASE 12 — SUIVI DES AVIS DE LA CONCURRENCE *(post-MVP, cadré 2026-07-03)*
+
+> Spec complète : **`AVIS_CONCURRENTS_FR.md`**. Rythme mensuel d'avis, ma fiche vs concurrents. Liste **partagée** avec le geogrid (décision utilisateur — découplage par `place_id` prévu pour une séparation future), quota = `rank_tracking.max_competitors` (3/5/10). Source DataForSEO (Places ne fournit pas l'historique). Synchro quotidienne échelonnée via le cron sync-reviews existant.
+
+| # | Session | Statut | Notes |
+|---|---------|--------|-------|
+| AC1 | Backend — données & synchro | ✅ Terminé (2026-07-03) | Migrations 47-49 (`competitor_reviews`, `review_competitor_tracking`, `review_sync_jobs.competitor_place_id`), modèles, réconciliation (`reconcileCompetitorTracking`) depuis `geogrid_competitors`, `enqueueDueCompetitors`/`enqueueSyncForCompetitor` (cadence fixe `REVIEWS_COMPETITOR_INTERVAL_MINUTES`=1440), `resolveJob` scindé (`resolveLocationJob`/`resolveCompetitorJob`, poll `tasks_ready` unifié). Voir détail ci-dessous |
+| AC2 | Backend — stats mensuelles | ⬜ À faire | `GET /reviews/competitors/stats` (agrégat SQL, complétude, série « ma fiche ») |
+| AC3 | Frontend — page Concurrents (avis) | ⬜ À faire | Sidebar AVIS > Concurrents, gestion + carte « Ce mois-ci » + courbe (TrendChart étendu, axe Y normal) + tableau + année |
+
+### Détail session AC1 — Backend données & synchro (2026-07-03)
+
+**Modèle de données** : `competitor_reviews` (avis concurrents, table séparée de `reviews`, unique `location_id+place_id+external_id`) ; `review_competitor_tracking` (1 ligne = 1 concurrent actuellement suivi, miroir réconcilié de `geogrid_competitors`, unique `location_id+place_id`) ; `review_sync_jobs.competitor_place_id` (nullable, NULL = job "ma fiche").
+
+**Réconciliation** (`reconcileCompetitorTracking`, appelée chaque tick avant l'enqueue) : diff entre les concurrents actifs de `geogrid_competitors` (résolus via `geogrid_configs.location_id`, aucune FK — découplage volontaire) et les lignes de tracking existantes, pour les seuls business dont le plan a `module_quotas.reviews.enabled`. Business devenu inéligible ou concurrent retiré/désactivé → ligne supprimée (synchro stoppée, `competitor_reviews` conservés) ; nouveau concurrent actif → ligne créée (`next_sync_at` NULL = backfill immédiat). Idempotente (vérifié : 2ᵉ passe = 0 créé/0 supprimé) et auto-réparatrice (vérifié : suppression manuelle d'une ligne + reconcile → recréée).
+
+**Synchro** : `enqueueSyncForCompetitor` soumet une tâche DataForSEO avec le `place_id` **du concurrent** et `location_coordinate` = coordonnées de **notre** localisation (même piège que session 21). `hasActiveJob` étendu à `(locationId, competitorPlaceId=null)` — un job concurrent en cours ne bloque plus la synchro de la fiche elle-même, ni les autres concurrents. `pollRunningJobs`/`resolveJob` unifiés : un seul `tasks_ready` partagé, branche sur `competitor_place_id` vers `resolveCompetitorJob` (upsert `competitor_reviews`, snapshot `total_reviews_count`/`avg_rating` du dernier lot, garde-fou saturation incrémentale identique à session 21).
+
+**Vérifié en conditions réelles** (3 vrais concurrents Atlasimmobilier/Marrakech, déjà suivis depuis G7) : le backend tournant en `nodemon` a **auto-rechargé le nouveau code et exécuté le flux de bout en bout automatiquement** dès l'écriture des fichiers — réconciliation → 3 lignes créées → 3 jobs backfill soumis (place_id concurrent + coordonnées Atlas acceptés par DataForSEO, **question ouverte §9 tranchée**) → **175 vrais avis concurrents importés** (12+140+23, $0.045 total, coût conforme au tarif standard depth 200). Isolation vérifiée : 0 interférence avec les jobs "ma fiche" (64 avis, inchangés). Aucune donnée de test à nettoyer (concurrents et avis 100 % réels).
 
 ## Références techniques critiques
 

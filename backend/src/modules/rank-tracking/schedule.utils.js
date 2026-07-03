@@ -44,8 +44,21 @@ function computeNextRunAt(config, timezone, fromDate = new Date()) {
   return next.toUTC().toJSDate()
 }
 
+// Comme computeNextRunAt, mais SAUTE toutes les occurrences déjà passées jusqu'à la première strictement
+// future. Sert au rattrapage après une longue coupure du backend : sans ce saut, un next_run_at très en
+// retard resterait dans le passé après un simple +1 période → le cron relancerait un rapport de rattrapage
+// à CHAQUE tick (rafale facturable). Ici on ne garde qu'UN rapport de rattrapage (le tick courant) puis on
+// cale next_run_at sur le prochain créneau réel. Garde-fou à 600 itérations (bien au-delà de tout cas réel).
+function computeNextRunAtSkipping(config, timezone, fromDate = new Date()) {
+  const now = new Date()
+  let next = computeNextRunAt(config, timezone, fromDate)
+  let guard = 0
+  while (next <= now && guard++ < 600) next = computeNextRunAt(config, timezone, next)
+  return next
+}
+
 function isValidTimezone(tz) {
   return typeof tz === 'string' && tz.length > 0 && DateTime.local().setZone(tz).isValid
 }
 
-module.exports = { computeNextRunAt, isValidTimezone }
+module.exports = { computeNextRunAt, computeNextRunAtSkipping, isValidTimezone }

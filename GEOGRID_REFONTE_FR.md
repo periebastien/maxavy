@@ -209,6 +209,21 @@ Verrou plan : si `rank_tracking.enabled = false`, la section est verrouillée (c
 - **Migration enum** : `frequency` `('weekly','daily')` → `('monthly','weekly','daily')`.
 - Timeout / anti-chevauchement / bornage batch+concurrence : inchangés (`GEOGRID_*` dans `.env`).
 
+### 7.1 Résilience (retry + étalement) — implémentée 2026-07-03
+
+Constat : `next_run_at` était avancé **avant** le scan (anti-boucle) → un simple blip réseau (`fetch failed`, échec **transport**) faisait perdre une semaine entière, sans nouvelle tentative. Correctif : **découplage** de la cadence (`next_run_at`, jamais touchée par une reprise) et de l'**état de reprise** (colonnes séparées, tout en DB → survit au redémarrage).
+
+- **Colonnes ajoutées** (migrations 50-52, additives) : `geogrid_scans.attempts / next_attempt_at / retry_reason`, `geogrid_runs.attempts / next_attempt_at / notify_failure`, statut `retry_pending` sur les deux enums.
+- **Distinction transport vs métier** (provider) : seul un échec **transport** (`err.transient`) est retenté ; une erreur métier DataForSEO (champ invalide…) est définitive. Retry court (0,5-2 s) uniquement sur les **GET idempotents** (`tasks_ready`/`task_get`), **jamais** sur `task_post` (pas de clé d'idempotence → double facturation).
+- **Level A — scan, échec transport (0 tâche postée)** : `retry_pending` + backoff **espacé** (`GEOGRID_RETRY_BACKOFF_SCAN` = 10/30/90 min) + **jitter déterministe** (`hashOffset(id)`, repris de la sync avis) → deux scans échoués au même instant ne repartent jamais en rafale. Re-soumission **en place** (`postScanTasks`, jamais de scan dupliqué), max `GEOGRID_MAX_SCAN_ATTEMPTS` (3).
+- **Level B — partiel/timeout (tâches déjà payées)** : re-poll **direct** `task_get` par `provider_task_id` (pas via `tasks_ready`, plafonné/volatile), fenêtre `GEOGRID_RECOVERY_WINDOW_MINUTES` (6 h). **Coût 0 $** — on ne jette pas des données payées.
+- **Level C — run entier inexploitable** : `closeFinishedRuns` replanifie (`retry_pending`, backoff `GEOGRID_RETRY_BACKOFF_RUN`) au lieu de clôturer, max `GEOGRID_MAX_RUN_ATTEMPTS` (2) ; relance en place les scans des mots-clés non couverts.
+- **Anti-double-facturation** : `postScanTasks` ne re-POSTe **que** les points sans task et tente d'abord d'**adopter** une tâche déjà créée (crash-pendant-POST, best-effort via `tasks_ready`).
+- **Étalement à grande échelle** (multi-tenant) : plafond `batchSize`/tick (déjà présent) + **plafond de points en vol** `GEOGRID_MAX_POINTS_IN_FLIGHT` (protège la file 1000 de DataForSEO) + **circuit-breaker** (`GEOGRID_BREAKER_THRESHOLD` échecs transport consécutifs → pause `GEOGRID_BREAKER_COOLDOWN_MINUTES` des **lancements ET reprises**). Ces portes ne bloquent que le lancement de travail neuf ; le poll et la clôture continuent.
+- **Ordre `next_run_at`** : run créé **avant** l'avancement de `next_run_at` (crash avant création → relancé au tick suivant, pas de semaine perdue) ; avancement avec **saut des périodes ratées** (`computeNextRunAtSkipping`) → pas de rafale de rattrapage après une longue coupure.
+- **`closeFinishedRuns`** : un scan `retry_pending` n'est **pas** terminal → le run reste ouvert (ni clôture ni alerte prématurée). `notify_failure` posé à la clôture définitive en échec = **hook** consommé par le rapport email (G11).
+- **Reprises re-vérifiées** : `config.active` + quota du plan re-contrôlés avant chaque reprise (une fiche désactivée/downgradée ne consomme plus).
+
 ---
 
 ## 8. Suivi (lecture seule)

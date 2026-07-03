@@ -19,7 +19,19 @@ function authHeader() {
   return `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}`
 }
 
-async function request(path, options = {}) {
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Erreur enrichie : `transient=true` marque un échec TRANSPORT (réseau/timeout) — seul cas où un retenter
+// a du sens. Une erreur métier DataForSEO (status_code != 20000) n'est jamais transient : la rejouer ne
+// changerait rien. Le service (scan.service.js) s'appuie sur ce flag pour décider d'une reprise.
+function providerError(message, { transient = false } = {}) {
+  const e = new Error(message)
+  e.status = 502
+  e.transient = transient
+  return e
+}
+
+async function rawRequest(path, options = {}) {
   let res
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -28,13 +40,32 @@ async function request(path, options = {}) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (err) {
-    throw { status: 502, message: `DataForSEO injoignable : ${err.message}` }
+    throw providerError(`DataForSEO injoignable : ${err.message}`, { transient: true })
   }
   const data = await res.json()
   if (data.status_code !== 20000) {
-    throw { status: 502, message: `DataForSEO : ${data.status_message || 'erreur inconnue'}` }
+    throw providerError(`DataForSEO : ${data.status_message || 'erreur inconnue'}`)
   }
   return data
+}
+
+// retries : uniquement pour les appels IDEMPOTENTS (GET tasks_ready / task_get). JAMAIS sur task_post,
+// qui n'a pas de clé d'idempotence côté DataForSEO → un retenter aveugle créerait des tâches en double
+// (double facturation). Ne retente que sur échec transport, backoff court (0.5s, 1s, 2s…) pour absorber
+// un blip instantané sans bloquer le tick ; l'espacement large (minutes) est géré au niveau scan.
+async function request(path, options = {}) {
+  const { retries = 0, retryDelayMs = 500, ...fetchOpts } = options
+  let lastErr
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await rawRequest(path, fetchOpts)
+    } catch (err) {
+      lastErr = err
+      if (!err.transient || attempt === retries) throw err
+      await sleep(retryDelayMs * Math.pow(2, attempt))
+    }
+  }
+  throw lastErr
 }
 
 // tasks: [{ tag, keyword, lat, lng, zoom? }] — tag = notre geogrid_point.id, pour corréler la réponse.
@@ -71,16 +102,17 @@ async function submitTasks(tasks) {
 }
 
 // Liste des tâches prêtes côté DataForSEO (globale au compte, scoping fait par l'appelant via provider_task_id/tag).
+// GET idempotent → retry court sur blip transport.
 async function getReadyTaskIds() {
-  const data = await request('/tasks_ready')
+  const data = await request('/tasks_ready', { retries: 2 })
   const items = data.tasks?.[0]?.result || []
   return items.map(it => ({ taskId: it.id, tag: it.tag }))
 }
 
 // Résultat d'une tâche prête. Retourne null si pas encore disponible (ne devrait pas arriver si on a
-// filtré via getReadyTaskIds() avant, mais reste défensif).
+// filtré via getReadyTaskIds() avant, mais reste défensif). GET idempotent → retry court sur blip transport.
 async function getTaskResult(taskId) {
-  const data = await request(`/task_get/advanced/${taskId}`)
+  const data = await request(`/task_get/advanced/${taskId}`, { retries: 2 })
   const task = data.tasks?.[0]
   if (!task || task.status_code !== 20000) return null
   const result = task.result?.[0]

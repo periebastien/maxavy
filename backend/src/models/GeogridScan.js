@@ -12,7 +12,7 @@ const GeogridScan = sequelize.define('GeogridScan', {
   grid_spacing_m:        { type: DataTypes.INTEGER, allowNull: false },
   center_lat:            { type: DataTypes.DECIMAL(10, 7) },
   center_lng:            { type: DataTypes.DECIMAL(10, 7) },
-  status:                { type: DataTypes.ENUM('pending', 'running', 'done', 'failed'), defaultValue: 'pending' },
+  status:                { type: DataTypes.ENUM('pending', 'running', 'done', 'failed', 'retry_pending'), defaultValue: 'pending' },
   provider:               { type: DataTypes.STRING },
   arp:                    { type: DataTypes.DECIMAL(6, 2) },
   atrp:                   { type: DataTypes.DECIMAL(6, 2) },
@@ -27,6 +27,9 @@ const GeogridScan = sequelize.define('GeogridScan', {
   credits_used:           { type: DataTypes.DECIMAL(10, 4) }, // coût fournisseur en $ (fractionnaire)
   error_message:          { type: DataTypes.TEXT },
   scanned_at:             { type: DataTypes.DATE },
+  attempts:               { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 }, // reprises consommées (résilience cron)
+  next_attempt_at:        { type: DataTypes.DATE }, // quand retenter (null = aucune reprise programmée)
+  retry_reason:           { type: DataTypes.STRING }, // 'transport' (re-submit sûr) | 'partial' (re-poll gratuit)
 }, {
   tableName: 'geogrid_scans',
   underscored: true,

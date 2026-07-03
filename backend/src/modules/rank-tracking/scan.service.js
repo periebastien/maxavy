@@ -10,7 +10,9 @@ const Location = require('../../models/Location')
 const GeogridCompetitor = require('../../models/GeogridCompetitor')
 const GeogridScanCompetitor = require('../../models/GeogridScanCompetitor')
 const { buildGrid } = require('./geogrid.utils')
-const { computeNextRunAt } = require('./schedule.utils')
+const { computeNextRunAt, computeNextRunAtSkipping } = require('./schedule.utils')
+const { computeBackoffMs } = require('./retry.utils')
+const rtConfig = require('./rank-tracking.config') // nommé rtConfig : `cfg` est déjà une variable de boucle dans runDueConfigs
 const provider = require('./providers')
 const { ensureAccess, getQuota, ensureConfigForLocation } = require('./rank-tracking.service')
 const competitorService = require('./competitor.service')
@@ -24,6 +26,39 @@ const MAX_COMPETITORS = 20
 
 function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length }
 function round2(n) { return Math.round(n * 100) / 100 }
+
+// ============ Circuit-breaker (résilience — GEOGRID_REFONTE_FR.md §7) ============
+// Compteur d'échecs TRANSPORT consécutifs, en mémoire (se réinitialise au redémarrage → fail-open, ce qui
+// est le bon défaut : on ne reste pas bloqué par un état stale). Quand DataForSEO tombe globalement, on
+// évite de continuer à lui envoyer des tâches (et des reprises) en rafale — la reco officielle est une
+// pause de quelques minutes sur erreurs en série. Un succès remet le compteur à zéro.
+let consecutiveTransportFailures = 0
+let circuitOpenUntil = null
+
+function recordTransportOutcome(failed) {
+  if (failed) {
+    consecutiveTransportFailures++
+    if (consecutiveTransportFailures >= rtConfig.breakerThreshold) {
+      circuitOpenUntil = new Date(Date.now() + rtConfig.breakerCooldownMinutes * 60 * 1000)
+    }
+  } else {
+    consecutiveTransportFailures = 0
+    circuitOpenUntil = null
+  }
+}
+
+function isCircuitOpen() {
+  if (!circuitOpenUntil) return false
+  if (new Date() >= circuitOpenUntil) { circuitOpenUntil = null; consecutiveTransportFailures = 0; return false }
+  return true
+}
+
+// Points « en vol » = tâches postées (payées) pas encore résolues. Plafonner ce total protège la file
+// tasks_ready de DataForSEO (bornée à 1000) : au-delà, on cesse de LANCER du nouveau travail ce tick, le
+// temps que l'existant draine — le poll et la clôture continuent, eux, normalement.
+async function pointsInFlight() {
+  return GeogridPoint.count({ where: { provider_task_id: { [Op.ne]: null }, fetched_at: null } })
+}
 
 async function loadKeyword(keywordId, businessId) {
   if (!UUID_RE.test(keywordId || '')) throw { status: 404, message: 'Mot-clé introuvable' }
@@ -79,42 +114,92 @@ async function submitScanForKeyword(keyword, { runId } = {}) {
     points_ranked: 0,
   })
 
-  const tasks = pointSpecs.map(p => ({ tag: p.id, keyword: keyword.keyword, lat: p.lat, lng: p.lng }))
+  // Points créés AVANT la soumission (provider_task_id null) : une reprise (postScanTasks) dispose ainsi
+  // de la grille même si le POST échoue en transport — cf. Level A, GEOGRID_REFONTE_FR.md §7.
+  await GeogridPoint.bulkCreate(pointSpecs.map(p => ({
+    id: p.id, scan_id: scan.id, business_id: businessId,
+    row: p.row, col: p.col, quadrant: p.quadrant, lat: p.lat, lng: p.lng, provider_task_id: null,
+  })))
 
+  return postScanTasks(scan)
+}
+
+// Primitive partagée (soumission initiale ET reprises). Ne LÈVE JAMAIS : un échec transport programme une
+// reprise (Level A), un échec métier marque le scan en échec définitif. Anti-double-facturation stricte :
+// ne re-POSTe QUE les points sans task, et tente d'abord d'ADOPTER une tâche déjà créée (crash-pendant-POST)
+// via tasks_ready (best-effort — ne voit que les tâches terminées). Une tâche déjà payée n'est jamais re-postée.
+async function postScanTasks(scan, { adopt = false } = {}) {
+  const points = await GeogridPoint.findAll({ where: { scan_id: scan.id } })
+
+  let noTask = points.filter(p => !p.provider_task_id)
+  // Adoption (REPRISES uniquement, adopt=true) : récupère d'éventuelles tâches déjà créées pour des points
+  // « sans task » avant de re-POSTer — garde anti-double-facturation sur un crash-pendant-POST. Inutile à la
+  // 1ʳᵉ soumission (points fraîchement créés, aucune tâche possible) → évite un appel tasks_ready par scan.
+  if (adopt && noTask.length) {
+    let ready
+    try { ready = new Map((await provider.getReadyTaskIds()).map(r => [r.tag, r.taskId])) } catch { ready = new Map() }
+    for (const p of noTask) {
+      const tid = ready.get(p.id)
+      if (tid) await p.update({ provider_task_id: tid })
+    }
+    noTask = points.filter(p => !p.provider_task_id)
+  }
+
+  if (!noTask.length) {
+    // Tout est déjà posté/adopté → le poll finalisera. (Cas rare : reprise après adoption complète.)
+    await scan.update({ status: 'running', next_attempt_at: null, retry_reason: null, error_message: null })
+    return GeogridScan.findByPk(scan.id)
+  }
+
+  const tasks = noTask.map(p => ({ tag: p.id, keyword: scan.keyword, lat: Number(p.lat), lng: Number(p.lng) }))
   let submitted
   try {
     submitted = await provider.submitTasks(tasks)
+    recordTransportOutcome(false)
   } catch (err) {
-    await scan.update({ status: 'failed', error_message: err.message })
-    throw err
+    if (err.transient) {
+      recordTransportOutcome(true)
+      return scheduleScanRetry(scan, 'transport', err.message)
+    }
+    // Erreur métier (ex. champ invalide) : rejouer ne changerait rien → échec définitif.
+    await scan.update({ status: 'failed', error_message: err.message, next_attempt_at: null, retry_reason: null })
+    return scan
   }
 
   const byTag = new Map(submitted.map(s => [s.tag, s]))
-  let totalCost = 0
-  let anySubmitted = false
-  const rows = pointSpecs.map(p => {
+  let addedCost = 0
+  for (const p of noTask) {
     const s = byTag.get(p.id)
-    if (s?.ok) { totalCost += s.cost || 0; anySubmitted = true }
-    return {
-      id: p.id,
-      scan_id: scan.id,
-      business_id: businessId,
-      row: p.row,
-      col: p.col,
-      quadrant: p.quadrant,
-      lat: p.lat,
-      lng: p.lng,
-      provider_task_id: s?.ok ? s.taskId : null,
-    }
-  })
-  await GeogridPoint.bulkCreate(rows)
+    if (s?.ok) { addedCost += s.cost || 0; await p.update({ provider_task_id: s.taskId }) }
+  }
+  const hasAnyTask = points.some(p => p.provider_task_id)
 
   await scan.update({
-    status: anySubmitted ? 'running' : 'failed',
-    credits_used: totalCost,
-    error_message: anySubmitted ? null : 'Aucune tâche acceptée par le fournisseur',
+    status: hasAnyTask ? 'running' : 'failed',
+    credits_used: round2((Number(scan.credits_used) || 0) + addedCost),
+    error_message: hasAnyTask ? null : 'Aucune tâche acceptée par le fournisseur',
+    next_attempt_at: null,
+    retry_reason: null,
   })
+  return GeogridScan.findByPk(scan.id)
+}
 
+// Programme la prochaine reprise d'un scan (backoff espacé + jitter déterministe anti-rafale) OU abandonne
+// après cfg.maxScanAttempts reprises (échec définitif). reason='transport' → re-submit sûr (0 tâche postée).
+async function scheduleScanRetry(scan, reason, errMsg) {
+  const attempts = scan.attempts + 1
+  if (attempts > rtConfig.maxScanAttempts) {
+    await scan.update({ status: 'failed', attempts, next_attempt_at: null, retry_reason: reason, error_message: errMsg })
+    return scan
+  }
+  const delayMs = computeBackoffMs(rtConfig.scanBackoffMinutes, attempts, scan.id, rtConfig.retryJitterMinutes)
+  await scan.update({
+    status: 'retry_pending',
+    attempts,
+    next_attempt_at: new Date(Date.now() + delayMs),
+    retry_reason: reason,
+    error_message: errMsg,
+  })
   return scan
 }
 
@@ -131,7 +216,11 @@ async function createScan(businessId, userId, keywordId) {
 // peut être pré-calculé par le cron pour éviter un appel tasks_ready par scan ; sinon récupéré ici.
 // Idempotent : ne retraite jamais un point déjà résolu (fetched_at non nul).
 async function applyRefresh(scan, readyTags) {
-  if (scan.status === 'done' || scan.status === 'failed') return scan
+  // 'retry_pending' = en attente de re-soumission (Level A), traité par relaunchDueRetryScans, pas ici.
+  if (scan.status === 'done' || scan.status === 'failed' || scan.status === 'retry_pending') return scan
+
+  // Récupération (Level B) : des tâches déjà PAYÉES attendent d'être finalisées (retry_reason='partial').
+  const recovering = scan.retry_reason === 'partial'
 
   const location = await Location.findByPk(scan.location_id)
   const targetPlaceId = location?.google_place_id
@@ -139,12 +228,19 @@ async function applyRefresh(scan, readyTags) {
   const pendingPoints = await GeogridPoint.findAll({ where: { scan_id: scan.id, fetched_at: null } })
 
   if (pendingPoints.length > 0) {
-    let tags = readyTags
-    if (!tags) {
-      const ready = await provider.getReadyTaskIds()
-      tags = new Set(ready.map(r => r.tag))
+    let toFetch
+    if (recovering) {
+      // tasks_ready peut avoir expiré ces tâches (plafond 1000, volatile) → on interroge task_get EN DIRECT
+      // par provider_task_id (source fiable, rétention 30 j côté DataForSEO, relecture gratuite).
+      toFetch = pendingPoints.filter(pt => pt.provider_task_id)
+    } else {
+      let tags = readyTags
+      if (!tags) {
+        const ready = await provider.getReadyTaskIds()
+        tags = new Set(ready.map(r => r.tag))
+      }
+      toFetch = pendingPoints.filter(pt => pt.provider_task_id && tags.has(pt.id))
     }
-    const toFetch = pendingPoints.filter(pt => pt.provider_task_id && tags.has(pt.id))
 
     for (const pt of toFetch) {
       const result = await provider.getTaskResult(pt.provider_task_id)
@@ -204,6 +300,8 @@ async function finalizeScan(scan) {
     points_top3: ranked.filter(p => p.rank <= 3).length,
     points_top10: ranked.filter(p => p.rank <= 10).length,
     points_top20: ranked.filter(p => p.rank <= 20).length,
+    next_attempt_at: null, // un scan finalisé (y compris récupéré via Level B) n'a plus de reprise en attente
+    retry_reason: null,
   })
 
   // Agrégats concurrents (G7) : concurrents actifs de la config du mot-clé, au moment du finalize.
@@ -256,36 +354,50 @@ async function findDueConfigs(limit) {
 // ne touche jamais next_run_at). Scanne tous les mots-clés actifs de la config. Un échec de lancement
 // sur UN mot-clé n'empêche pas les autres (Promise.allSettled) et marque has_failures sans faire
 // échouer le run entier.
-async function launchRun(config, trigger, scheduledFor) {
-  const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
-  const run = await GeogridRun.create({
+async function createRunRow(config, trigger, scheduledFor, keywordCount) {
+  return GeogridRun.create({
     business_id: config.business_id,
     location_id: config.location_id,
     config_id: config.id,
     trigger,
-    status: keywords.length ? 'running' : 'done',
+    status: keywordCount ? 'running' : 'done',
     scheduled_for: scheduledFor || null,
     started_at: new Date(),
-    finished_at: keywords.length ? null : new Date(),
-    keywords_total: keywords.length,
+    finished_at: keywordCount ? null : new Date(),
+    keywords_total: keywordCount,
     keywords_done: 0,
   })
-  if (!keywords.length) return run
+}
 
-  const results = await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id })))
-  if (results.some(r => r.status === 'rejected')) await run.update({ has_failures: true })
+// has_failures n'est PLUS posé ici : closeFinishedRuns le calcule d'après le statut FINAL des scans (un
+// blip transport devient retry_pending, pas un échec définitif). Promise.allSettled isole les erreurs de
+// setup (config/localisation absente) — le mot-clé concerné n'aura pas de scan → détecté à la clôture.
+async function submitRunScans(run, keywords) {
+  if (!keywords.length) return
+  await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id })))
+}
+
+async function launchRun(config, trigger, scheduledFor) {
+  const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
+  const run = await createRunRow(config, trigger, scheduledFor, keywords.length)
+  await submitRunScans(run, keywords)
   return run
 }
 
-// Lance un rapport (run) pour une config due (appelé par le cron) : avance next_run_at IMMÉDIATEMENT
-// (avant tout scan, même principe anti-boucle que last_scanned_at en G3 — un échec ne redéclenche pas
-// le run à chaque tick), puis délègue au cœur.
+// Lance un rapport (run) pour une config due (appelé par le cron). Ordre CLÉ (GEOGRID_REFONTE_FR.md §7) :
+// on crée le run AVANT d'avancer next_run_at — un crash avant la création laisse next_run_at dans le passé
+// → relancé au tick suivant (plus de semaine perdue) ; après, next_run_at est avancé (avec SAUT des périodes
+// ratées) → ni run dupliqué ni rafale de rattrapage. Un échec de scan est géré par reprise (retry_pending),
+// pas par la re-détection de config due.
 async function launchRunForConfig(config) {
   const business = await Business.findByPk(config.business_id)
   const timezone = config.timezone || business?.timezone || 'Europe/Paris'
   const anchor = config.next_run_at || new Date()
-  await config.update({ next_run_at: computeNextRunAt(config, timezone, anchor) })
-  return launchRun(config, 'scheduled', anchor)
+  const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
+  const run = await createRunRow(config, 'scheduled', anchor, keywords.length)
+  await config.update({ next_run_at: computeNextRunAtSkipping(config, timezone, anchor) })
+  await submitRunScans(run, keywords)
+  return run
 }
 
 // Endpoint manuel « lancer un rapport maintenant » (G7 — scanne tous les mots-clés actifs de la
@@ -358,28 +470,41 @@ async function runDueConfigs(batchSize, concurrency) {
   return { launched, skipped, failed }
 }
 
-// Clôture les runs dont tous les scans sont dans un état terminal (done/failed). has_failures se
-// déclenche aussi si moins de scans que de mots-clés visés existent (échec de lancement non rattrapé,
-// ex. crash pendant launchRunForConfig) — comportement auto-réparateur, cf. GEOGRID_REFONTE_FR.md §16.
+// Clôture les runs dont tous les scans sont dans un état terminal (done/failed). Un scan 'retry_pending'
+// (reprise en attente) N'EST PAS terminal → le run reste ouvert, pas de clôture ni d'alerte prématurée.
+// has_failures se déclenche aussi si moins de scans que de mots-clés visés existent (crash de lancement) —
+// auto-réparateur, cf. GEOGRID_REFONTE_FR.md §16.
 async function closeFinishedRuns() {
   const running = await GeogridRun.findAll({ where: { status: 'running' } })
-  let closed = 0
+  let closed = 0, retried = 0
   for (const run of running) {
     const scans = await GeogridScan.findAll({ where: { run_id: run.id }, attributes: ['status'] })
     const unresolved = scans.filter(s => !['done', 'failed'].includes(s.status))
     if (unresolved.length) continue
 
     const failedCount = scans.filter(s => s.status === 'failed').length
+    const usable = scans.length - failedCount // scans 'done' exploitables
     const hasFailures = run.has_failures || failedCount > 0 || scans.length < run.keywords_total
+
+    // Level C : rapport entièrement inexploitable (aucun scan 'done') et reprises de run non épuisées →
+    // replanifier une relance complète (statut retry_pending → ni clôture ni alerte tant que ça peut réussir).
+    if (hasFailures && usable === 0 && run.attempts < rtConfig.maxRunAttempts) {
+      const delayMs = computeBackoffMs(rtConfig.runBackoffMinutes, run.attempts + 1, run.id, rtConfig.retryJitterMinutes)
+      await run.update({ status: 'retry_pending', attempts: run.attempts + 1, next_attempt_at: new Date(Date.now() + delayMs) })
+      retried++
+      continue
+    }
+
     await run.update({
       status: 'done',
       has_failures: hasFailures,
       finished_at: new Date(),
-      keywords_done: scans.length - failedCount,
+      keywords_done: usable,
+      notify_failure: hasFailures, // hook alerte email (G11) — l'envoi réel consommera puis remettra à false
     })
     closed++
   }
-  return { closed }
+  return { closed, retried }
 }
 
 // Rafraîchit tous les scans en cours. Un seul appel tasks_ready pour tout le tick (partagé entre scans).
@@ -399,18 +524,113 @@ async function refreshRunningScans(concurrency) {
   return { refreshed: running.length, done }
 }
 
-// Bascule en 'failed' les scans coincés (pending/running trop vieux) — garde les points déjà résolus.
+// Traite les scans coincés (pending/running trop vieux). Deux issues, au lieu d'un échec systématique :
+// (1) des tâches DÉJÀ PAYÉES attendent encore ET on est dans la fenêtre de récupération → bascule en
+// récupération (Level B : re-poll direct au tick), on ne jette pas de données payées ; (2) sinon → échec.
 async function failStuckScans(timeoutMinutes) {
   const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000)
-  const [count] = await GeogridScan.update(
-    { status: 'failed', error_message: `Timeout : non terminé après ${timeoutMinutes} min` },
-    { where: { status: { [Op.in]: ['pending', 'running'] }, createdAt: { [Op.lte]: cutoff } } }
-  )
-  return { failed: count }
+  const recoveryCutoff = new Date(Date.now() - rtConfig.recoveryWindowMinutes * 60 * 1000)
+  const stuck = await GeogridScan.findAll({
+    where: { status: { [Op.in]: ['pending', 'running'] }, createdAt: { [Op.lte]: cutoff } },
+  })
+  let failed = 0, recovering = 0
+  for (const scan of stuck) {
+    const paidUnresolved = await GeogridPoint.count({
+      where: { scan_id: scan.id, provider_task_id: { [Op.ne]: null }, fetched_at: null },
+    })
+    if (paidUnresolved > 0 && scan.createdAt > recoveryCutoff) {
+      if (scan.retry_reason !== 'partial') { await scan.update({ retry_reason: 'partial' }); recovering++ }
+    } else {
+      await scan.update({ status: 'failed', next_attempt_at: null, error_message: `Timeout : non terminé après ${timeoutMinutes} min` })
+      failed++
+    }
+  }
+  return { failed, recovering }
+}
+
+// Un scan/run en reprise ne repart que si le suivi est TOUJOURS actif et le module au plan — une fiche
+// désactivée ou une entreprise downgradée entre deux essais ne doit plus consommer de crédits.
+async function retryStillEligible(businessId, keywordId) {
+  const keyword = await GeogridKeyword.findByPk(keywordId)
+  if (!keyword || !keyword.active) return false
+  const config = keyword.config_id ? await GeogridConfig.findByPk(keyword.config_id) : null
+  if (!config || !config.active) return false
+  const business = await Business.findByPk(businessId)
+  if (!business) return false
+  const quota = await getQuota(business)
+  return !!quota.enabled
+}
+
+// Reprises de scans dues (Level A) : re-soumission EN PLACE via postScanTasks (ne re-POSTe que les points
+// sans task → aucune double facturation). Plafonné à batchSize, exécuté par paquets de concurrency.
+async function relaunchDueRetryScans(batchSize, concurrency) {
+  const now = new Date()
+  const due = await GeogridScan.findAll({
+    where: { status: 'retry_pending', retry_reason: 'transport', next_attempt_at: { [Op.lte]: now } },
+    order: [['next_attempt_at', 'ASC']], limit: batchSize,
+  })
+  if (!due.length) return { relaunched: 0, cancelled: 0 }
+
+  let relaunched = 0, cancelled = 0
+  for (let i = 0; i < due.length; i += concurrency) {
+    const chunk = due.slice(i, i + concurrency)
+    const results = await Promise.allSettled(chunk.map(async scan => {
+      if (!(await retryStillEligible(scan.business_id, scan.keyword_id))) {
+        await scan.update({ status: 'failed', next_attempt_at: null, retry_reason: null, error_message: 'Reprise annulée : suivi désactivé' })
+        return 'cancelled'
+      }
+      await postScanTasks(scan, { adopt: true })
+      return 'relaunched'
+    }))
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value === 'cancelled') cancelled++
+      else if (r.status === 'fulfilled') relaunched++
+    }
+  }
+  return { relaunched, cancelled }
+}
+
+// Reprises de runs dues (Level C) : relance en place les scans échoués des mots-clés actifs non couverts
+// (aucun scan 'done'), remet le run en 'running' (closeFinishedRuns le re-clôturera). Suivi désactivé
+// entre-temps → clôture définitive + alerte.
+async function relaunchDueRetryRuns(batchSize, concurrency) {
+  const now = new Date()
+  const due = await GeogridRun.findAll({
+    where: { status: 'retry_pending', next_attempt_at: { [Op.lte]: now } },
+    order: [['next_attempt_at', 'ASC']], limit: batchSize,
+  })
+  if (!due.length) return { relaunched: 0, cancelled: 0 }
+
+  let relaunched = 0, cancelled = 0
+  for (const run of due) {
+    const config = await GeogridConfig.findByPk(run.config_id)
+    const business = await Business.findByPk(run.business_id)
+    const quota = business ? await getQuota(business) : { enabled: false }
+    if (!config || !config.active || !quota.enabled) {
+      await run.update({ status: 'done', next_attempt_at: null, finished_at: new Date(), has_failures: true, notify_failure: true })
+      cancelled++
+      continue
+    }
+    const doneScans = await GeogridScan.findAll({ where: { run_id: run.id, status: 'done' }, attributes: ['keyword_id'] })
+    const doneKwIds = new Set(doneScans.map(s => s.keyword_id))
+    const activeKeywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true }, attributes: ['id'] })
+    const activeKwIds = new Set(activeKeywords.map(k => k.id))
+    const failedScans = await GeogridScan.findAll({ where: { run_id: run.id, status: 'failed' } })
+    const toRetry = failedScans.filter(s => !doneKwIds.has(s.keyword_id) && activeKwIds.has(s.keyword_id))
+
+    await run.update({ status: 'running', next_attempt_at: null })
+    relaunched++
+    for (let i = 0; i < toRetry.length; i += concurrency) {
+      const chunk = toRetry.slice(i, i + concurrency)
+      await Promise.allSettled(chunk.map(scan => postScanTasks(scan, { adopt: true })))
+    }
+  }
+  return { relaunched, cancelled }
 }
 
 module.exports = {
   createScan, refreshScan, listScans, getScan,
   createRun, listRuns, getRun, getTrend,
   runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans,
+  relaunchDueRetryScans, relaunchDueRetryRuns, isCircuitOpen, pointsInFlight,
 }

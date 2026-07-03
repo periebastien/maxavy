@@ -1,5 +1,8 @@
 const config = require('../modules/rank-tracking/rank-tracking.config')
-const { runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans } = require('../modules/rank-tracking/scan.service')
+const {
+  runDueConfigs, refreshRunningScans, closeFinishedRuns, failStuckScans,
+  relaunchDueRetryScans, relaunchDueRetryRuns, isCircuitOpen, pointsInFlight,
+} = require('../modules/rank-tracking/scan.service')
 
 // Boucle unique du geogrid (voir GEOGRID_DESIGN_FR.md §6). setInterval et non node-cron :
 // un intervalle de 90 s n'est pas exprimable en cron (le champ secondes plafonne à 59).
@@ -13,17 +16,35 @@ async function tick() {
   }
   ticking = true
   try {
-    // 1) nettoyer les scans bloqués, 2) faire avancer ceux en cours, 3) clôturer les rapports terminés,
-    // 4) lancer les nouveaux rapports dus (dans cet ordre pour ne pas re-scruter un run tout juste lancé)
+    // 1) nettoyer/récupérer les scans bloqués, 2) faire avancer ceux en cours, 3) clôturer les rapports
+    // terminés — ces 3 passes tournent TOUJOURS (elles drainent l'existant, ne créent pas de charge neuve).
     const stuck = await failStuckScans(config.scanTimeoutMinutes)
     const polled = await refreshRunningScans(config.concurrency)
     const closedRuns = await closeFinishedRuns()
-    const launched = await runDueConfigs(config.batchSize, config.concurrency)
 
-    if (launched.launched || launched.failed || polled.done || stuck.failed || closedRuns.closed) {
+    // 4) LANCEMENT de travail neuf (reprises + nouveaux rapports) : soumis à deux portes anti-surcharge —
+    // circuit-breaker ouvert (panne DataForSEO en série) ou trop de points en vol (protège tasks_ready).
+    // Si l'une bloque, on saute le lancement ce tick ; le drain se poursuit aux ticks suivants.
+    let launched = { launched: 0, skipped: 0, failed: 0 }
+    let retryScans = { relaunched: 0, cancelled: 0 }
+    let retryRuns = { relaunched: 0, cancelled: 0 }
+    let gate = null
+    if (isCircuitOpen()) gate = 'circuit-ouvert'
+    else if ((await pointsInFlight()) >= config.maxPointsInFlight) gate = 'points-en-vol-satures'
+    if (!gate) {
+      retryScans = await relaunchDueRetryScans(config.batchSize, config.concurrency)
+      retryRuns = await relaunchDueRetryRuns(config.batchSize, config.concurrency)
+      launched = await runDueConfigs(config.batchSize, config.concurrency)
+    }
+
+    if (launched.launched || launched.failed || polled.done || stuck.failed || stuck.recovering ||
+        closedRuns.closed || closedRuns.retried || retryScans.relaunched || retryRuns.relaunched || gate) {
       console.log(
         `[cron][geogrid] rapports lancés=${launched.launched} ignorés=${launched.skipped} échoués=${launched.failed} ` +
-        `| scans rafraîchis=${polled.refreshed} terminés=${polled.done} | rapports clôturés=${closedRuns.closed} | timeout=${stuck.failed}`
+        `| reprises scans=${retryScans.relaunched} (annulées=${retryScans.cancelled}) runs=${retryRuns.relaunched} ` +
+        `| scans rafraîchis=${polled.refreshed} terminés=${polled.done} récup=${stuck.recovering} ` +
+        `| rapports clôturés=${closedRuns.closed} replanifiés=${closedRuns.retried} | timeout=${stuck.failed}` +
+        (gate ? ` | LANCEMENT EN PAUSE (${gate})` : '')
       )
     }
   } catch (err) {
