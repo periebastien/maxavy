@@ -128,16 +128,19 @@ async function submitScanForKeyword(keyword, { runId } = {}) {
 // reprise (Level A), un échec métier marque le scan en échec définitif. Anti-double-facturation stricte :
 // ne re-POSTe QUE les points sans task, et tente d'abord d'ADOPTER une tâche déjà créée (crash-pendant-POST)
 // via tasks_ready (best-effort — ne voit que les tâches terminées). Une tâche déjà payée n'est jamais re-postée.
-async function postScanTasks(scan, { adopt = false } = {}) {
+async function postScanTasks(scan, { adopt = false, readyMap = null } = {}) {
   const points = await GeogridPoint.findAll({ where: { scan_id: scan.id } })
 
   let noTask = points.filter(p => !p.provider_task_id)
   // Adoption (REPRISES uniquement, adopt=true) : récupère d'éventuelles tâches déjà créées pour des points
   // « sans task » avant de re-POSTer — garde anti-double-facturation sur un crash-pendant-POST. Inutile à la
-  // 1ʳᵉ soumission (points fraîchement créés, aucune tâche possible) → évite un appel tasks_ready par scan.
+  // 1ʳᵉ soumission (points fraîchement créés, aucune tâche possible). `readyMap` est fourni par l'appelant
+  // (UN seul tasks_ready pour tout le lot → limite serrée 60/min) ; repli sur un fetch local sinon.
   if (adopt && noTask.length) {
-    let ready
-    try { ready = new Map((await provider.getReadyTaskIds()).map(r => [r.tag, r.taskId])) } catch { ready = new Map() }
+    let ready = readyMap
+    if (!ready) {
+      try { ready = new Map((await provider.getReadyTaskIds()).map(r => [r.tag, r.taskId])) } catch { ready = new Map() }
+    }
     for (const p of noTask) {
       const tid = ready.get(p.id)
       if (tid) await p.update({ provider_task_id: tid })
@@ -608,6 +611,10 @@ async function relaunchDueRetryScans(batchSize, concurrency) {
   })
   if (!due.length) return { relaunched: 0, cancelled: 0 }
 
+  // UN seul tasks_ready partagé par tout le lot (adoption anti-double-POST) au lieu d'un appel par scan.
+  let readyMap = new Map()
+  try { readyMap = new Map((await provider.getReadyTaskIds()).map(r => [r.tag, r.taskId])) } catch { readyMap = new Map() }
+
   let relaunched = 0, cancelled = 0
   for (let i = 0; i < due.length; i += concurrency) {
     const chunk = due.slice(i, i + concurrency)
@@ -616,7 +623,7 @@ async function relaunchDueRetryScans(batchSize, concurrency) {
         await scan.update({ status: 'failed', next_attempt_at: null, retry_reason: null, error_message: 'Reprise annulée : suivi désactivé' })
         return 'cancelled'
       }
-      await postScanTasks(scan, { adopt: true })
+      await postScanTasks(scan, { adopt: true, readyMap })
       return 'relaunched'
     }))
     for (const r of results) {
@@ -637,6 +644,10 @@ async function relaunchDueRetryRuns(batchSize, concurrency) {
     order: [['next_attempt_at', 'ASC']], limit: batchSize,
   })
   if (!due.length) return { relaunched: 0, cancelled: 0 }
+
+  // UN seul tasks_ready partagé pour toutes les reprises de ce lot de runs.
+  let readyMap = new Map()
+  try { readyMap = new Map((await provider.getReadyTaskIds()).map(r => [r.tag, r.taskId])) } catch { readyMap = new Map() }
 
   let relaunched = 0, cancelled = 0
   for (const run of due) {
@@ -659,7 +670,7 @@ async function relaunchDueRetryRuns(batchSize, concurrency) {
     relaunched++
     for (let i = 0; i < toRetry.length; i += concurrency) {
       const chunk = toRetry.slice(i, i + concurrency)
-      await Promise.allSettled(chunk.map(scan => postScanTasks(scan, { adopt: true })))
+      await Promise.allSettled(chunk.map(scan => postScanTasks(scan, { adopt: true, readyMap })))
     }
   }
   return { relaunched, cancelled }

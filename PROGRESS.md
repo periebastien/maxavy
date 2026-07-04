@@ -342,6 +342,7 @@ Rend l'interface d'admin pleinement utilisable sur mobile (avant : layout deskto
 | G10 | Frontend — Concurrents | ✅ Terminé (2026-07-03) | Page `/positionnement/concurrents` : tableau + courbes de comparaison vs concurrents suivis, nouvel endpoint `GET /competitors/trend`. Voir détail ci-dessous |
 | G10.5 | Backend — résilience cron (retry + étalement) | ✅ Terminé (2026-07-03) | Correctif hors-plan suite à un rapport planifié perdu sur blip réseau : retry 3 niveaux (transport/partiel/run) espacés + jitter déterministe, découplage cadence/reprise (migrations 50-52), circuit-breaker, plafond points en vol, saut multi-périodes, hook alerte G11. Voir détail ci-dessous |
 | G10.6 | Frontend — refonte UX Suivi/Concurrents | ✅ Terminé (2026-07-03) | Page Suivi unifiée : sélecteur mot-clé (dont « Moyenne globale ») pilotant grand graphe + grande carte, clic-jour sur la courbe → carte, heatmap moyenne globale (endpoint `GET /runs/:id/average-map`). Même gabarit sur Concurrents. Voir détail ci-dessous |
+| G10.7 | Backend — portail débit/concurrence DataForSEO | ✅ Terminé (2026-07-04) | Audit (2000/min compte, 60/min tasks_ready, file 1000, compte partagé geogrid+avis) → portail global `services/dataforseo-gate.js` (sémaphore concurrence + débit/min + sous-plafond tasks_ready), branché sur les DEUX providers, + fix fan-out tasks_ready. Voir détail ci-dessous |
 | G11 | Rapport email (v1) | ⬜ À faire | Config email chiffrée (AES-256-GCM), résumé + lien ; **consommer `geogrid_runs.notify_failure`** (hook posé en G10.5) |
 | G12 | Super Admin — quotas `rank_tracking` | ⬜ À faire | Édition des plafonds par plan sans redéploiement |
 
@@ -677,6 +678,16 @@ Demande utilisateur : fusionner le Suivi en **une seule vue** — grand graphe +
 
 Prochaine session : **G11 — Rapport email (v1)**.
 
+### Détail session G10.7 — Backend : portail débit/concurrence DataForSEO (2026-07-04)
+
+Signalé par l'utilisateur : « des requêtes qui n'aboutissent pas » (trop d'appels API en même temps). Audit sur données réelles : **5 scans échoués `DataForSEO injoignable`** (timeouts) en 24h ; limites du compte = **2000 appels/min au total**, **60/min sur `tasks_ready`**, file plafonnée à **1000** ; compte **partagé** entre le cron geogrid (tick 90 s) et le cron avis (tick 60 s). Cause : aucune borne globale sur les connexions HTTP simultanées (les params `concurrency` bornent les scans/jobs, pas les appels réseau qu'ils déclenchent chacun) → rafales de `task_post`/`task_get` au lancement/poll, + `tasks_ready` appelé une fois **par scan** dans la reprise (au lieu d'un partagé).
+
+**Solution** — nouveau `backend/src/services/dataforseo-gate.js` (singleton, sans dépendance) : `schedule(fn, kind)` borne (1) les requêtes **simultanées** (sémaphore, `DATAFORSEO_MAX_CONCURRENCY=12`) et (2) le **débit/min** (fenêtre glissante, `DATAFORSEO_MAX_PER_MINUTE=1500`) avec un **sous-plafond `tasks_ready`** (`DATAFORSEO_TASKS_READY_PER_MINUTE=50`) ; l'excédent est mis en file FIFO et libéré au fil des créneaux. Les **deux** providers (`dataforseo.provider.js` geogrid + `dataforseo-reviews.provider.js` avis) routent leur `fetch` via le portail → charge combinée bornée quel que soit le nombre de fiches. ⚠️ AbortSignal (timeout 20 s) créé **dans** le thunk `schedule` → le timeout ne compte que l'exécution, pas l'attente en file. Fix complémentaire : un seul `getReadyTaskIds` partagé par lot de reprises (`postScanTasks(scan, {readyMap})`) au lieu d'un par scan.
+
+**Vérifié** : test unitaire isolé du portail (sémaphore plafonne bien la concurrence à 3, sous-plafond tasks_ready retarde le 5ᵉ appel) ; appels réels via les deux providers en parallèle (geogrid + avis `tasks_ready` aboutissent via le portail, stats cohérentes) ; backend redémarré propre (2 crons OK). Réglages `.env` (`DATAFORSEO_MAX_*`). Note : ~256 tâches geogrid résiduelles dans la file DataForSEO (scans qui avaient timeouté avant) — s'évacuent d'elles-mêmes, le portail empêche l'accumulation future. ⚠️ Le câblage du provider avis touche un fichier de la session parallèle (autorisé par l'utilisateur : « branche les deux ») — non committé côté geogrid (fichier avis non suivi).
+
+Prochaine session : **G11 — Rapport email (v1)**.
+
 ---
 
 ## PHASE 12 — SUIVI DES AVIS DE LA CONCURRENCE *(post-MVP, cadré 2026-07-03)*
@@ -724,6 +735,21 @@ Prochaine session : **G11 — Rapport email (v1)**.
 4. **Collision de clé de courbe pour des concurrents homonymes** (`s.name` utilisé comme clé de données ET clé React) — pas un cas théorique : « Guy Hoquet », une enseigne en franchise, est un des 3 vrais concurrents suivis. Corrigé en étendant `TrendChart` : `dataKey`/`key` = `s.key` (place_id, toujours unique), nouveau prop `label` séparé pour l'affichage (légende/infobulle) — rétrocompatible (défaut `label || key`).
 
 **Vérifié en conditions réelles** : redémarrage backend nécessaire en cours de vérif (l'ancien process servait du code d'avant le fix `last_synced_at`, symptôme repéré car "dernière synchro : jamais" pour 3 concurrents dont la base avait pourtant la vraie date — jamais fait confiance à l'écran sans vérifier la donnée réelle en base). Après redémarrage : page testée en preview avec les vraies données Atlasimmobilier — quota 3/3 correctement bloquant (« Limite de votre plan atteinte »), 3 concurrents affichés avec note/total/date réels, carte "Ce mois-ci" cohérente, courbe à **4 lignes** rendue sans collision (légende avec les 4 noms distincts, dont Guy Hoquet), tableau correct. Non-régression confirmée sur `/positionnement/suivi` (label "Position" intact, aucune erreur console). `ResponsiveContainer` de Recharts a mis ~2s à se mesurer en preview headless (comportement déjà documenté sur ce projet, pas un bug — confirmé identique sur les pages positionnement existantes).
+
+**Refonte UX sur retours utilisateur (2026-07-03)** : (1) la carte « Ce mois-ci » affichait un seul concurrent (le meilleur, en sous-texte) → remplacée par une **grille de `MetricCard`** (Ma fiche + une par concurrent, comparatif du mois en un coup d'œil). (2) Réordonnancement demandé : cartes « ce mois-ci » → **courbe** → **tableau** → gestion des concurrents en bas. (3) **Pleine largeur** (retrait de `max-w-4xl`) + tableau `table-fixed` avec colonnes de résultats **proportionnelles** (la colonne « Ma fiche » n'est plus rétrécie). (4) **Charte de rang partagée extraite** dans `frontend/src/lib/rank-palette.js` (source unique : couleurs pleines + fonds doux + texte ; `lib/geogrid.js` la ré-exporte → zéro régression sur la carte/légendes, vérifié) ; cellules du tableau **colorées par classement relatif du mois** (leader = vert, dernier = rouge, entre-deux = orange) — plus discriminant que les seuils absolus top3/10/20 à faible nombre de concurrents, tout en réutilisant la même charte que la heatmap. Vérifié en preview sur données réelles (2025) : ex. Janvier Ma fiche=1 (rouge) vs Guy Hoquet=3 (vert), Juin Ma fiche=5 (vert) — le signal « qui gagne le mois » est correct ; non-régression `/positionnement/suivi` (légende `RANK_LEGEND` intacte) reconfirmée.
+
+### Correctif transverse — isolation par localisation active (2026-07-04)
+
+**Bug rapporté** (compte cogitowebnet, 2 localisations Atlasimmobilier Marrakech/Essaouira) : changer de localisation dans la sidebar ne changeait pas les données des pages Avis et Clients. Audit multi-agents complet (32 agents : code frontend/backend + données réelles en base + reproduction API) : la base était **saine** (25 avis Marrakech / 39 Essaouira, 0 mélange), le défaut était applicatif.
+
+**Corrigé (implémentation parallèle, 4 sous-agents + Dashboard)** :
+- `ReviewsPage` : câblée sur `activeLocation` (dropdown local « Toutes les localisations » supprimé, `location_id` systématique, re-fetch au changement).
+- `customers` : migration **20260704000053** `customers.location_id` (FK nullable, NULL = visible sur toutes les fiches, index `(business_id, location_id)`) ; create/import CSV/list/stats filtrés + validation d'appartenance ; `CustomersPage` câblée.
+- `invitations` : **bug réel** — `location_id` reçu/validé mais jamais persisté par l'envoi unitaire → corrigé (2 `Invitation.create`). Destinataires de campagne (`all`/`uninvited`) scoppés localisation-ou-NULL ; `GET /campaigns?locationId=` ; `InvitationsPage` câblée.
+- `widgets` : `GET /widgets?location_id=` (widgets de la fiche + globaux, badge « Toutes les localisations ») ; builder pré-sélectionné sur la fiche active ; **faille corrigée** : `assertOwnership` (locationId/tagId cross-tenant acceptés sans vérification dans create/update/preview).
+- `DashboardPage` : métriques par fiche active (avis collectés/note = snapshots `locations`, clients invités = stats filtrées).
+
+**Vérifié en réel** : script API authentifié (25 vs 39 avis, ids disjoints, stats/campagnes/widgets par fiche) + preview navigateur (bascule sidebar Marrakech→Essaouira change bien la page Avis en live), 0 erreur console nouvelle. Pages déjà conformes non touchées (Positionnement ×3, Avis concurrents, QR Code, Page de collecte). **Findings d'audit restants non traités** (à planifier) : `POST /credits/add` ouvert à tout membre (auto-crédit gratuit), index unique global `reviews(platform, external_id)` (vol d'avis si 2 fiches partagent un place_id), `business.middleware.js` = code mort.
 
 ## Références techniques critiques
 

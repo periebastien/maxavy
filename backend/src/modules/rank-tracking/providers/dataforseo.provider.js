@@ -12,6 +12,8 @@ const REQUEST_TIMEOUT_MS = 20000
 // (plafonné à 1000 chez DataForSEO).
 const TASK_PRIORITY = 2
 
+const { schedule } = require('../../../services/dataforseo-gate')
+
 function authHeader() {
   const login = process.env.DATAFORSEO_LOGIN
   const password = process.env.DATAFORSEO_PASSWORD
@@ -32,13 +34,15 @@ function providerError(message, { transient = false } = {}) {
 }
 
 async function rawRequest(path, options = {}) {
+  // Portail global partagé (geogrid + avis) : borne les requêtes simultanées et le débit/min vers DataForSEO.
+  const kind = path.includes('tasks_ready') ? 'tasks_ready' : 'default'
   let res
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await schedule(() => fetch(`${BASE_URL}${path}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', Authorization: authHeader(), ...(options.headers || {}) },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
+    }), kind)
   } catch (err) {
     throw providerError(`DataForSEO injoignable : ${err.message}`, { transient: true })
   }
