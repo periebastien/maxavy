@@ -6,10 +6,10 @@ const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const { assertAccess } = require('../businesses/business.service')
 
-async function assertBusiness(businessId, userId) {
+async function assertBusiness(businessId, userId, opts = {}) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, opts)
   return business
 }
 
@@ -21,7 +21,7 @@ function computeIntervalMinutes({ rate_per_day, rate_per_week }) {
 }
 
 async function create({ businessId, userId, name, channel, locationId, customerIds, filter, ratePer, rateUnit }) {
-  const business = await assertBusiness(businessId, userId)
+  const business = await assertBusiness(businessId, userId, { write: true })
 
   const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
   if (!location) throw { status: 404, message: 'Localisation introuvable' }
@@ -86,7 +86,7 @@ async function list(businessId, userId, locationId) {
 }
 
 async function pause(campaignId, businessId, userId) {
-  await assertBusiness(businessId, userId)
+  await assertBusiness(businessId, userId, { write: true })
   const campaign = await InvitationCampaign.findOne({ where: { id: campaignId, business_id: businessId } })
   if (!campaign) throw { status: 404, message: 'Campagne introuvable' }
   if (campaign.status !== 'running') throw { status: 400, message: 'Campagne non active' }
@@ -95,7 +95,7 @@ async function pause(campaignId, businessId, userId) {
 }
 
 async function resume(campaignId, businessId, userId) {
-  await assertBusiness(businessId, userId)
+  await assertBusiness(businessId, userId, { write: true })
   const campaign = await InvitationCampaign.findOne({ where: { id: campaignId, business_id: businessId } })
   if (!campaign) throw { status: 404, message: 'Campagne introuvable' }
   if (campaign.status !== 'paused') throw { status: 400, message: 'Campagne non en pause' }
@@ -104,7 +104,7 @@ async function resume(campaignId, businessId, userId) {
 }
 
 async function cancel(campaignId, businessId, userId) {
-  await assertBusiness(businessId, userId)
+  await assertBusiness(businessId, userId, { write: true })
   const campaign = await InvitationCampaign.findOne({ where: { id: campaignId, business_id: businessId } })
   if (!campaign) throw { status: 404, message: 'Campagne introuvable' }
   if (['completed', 'cancelled'].includes(campaign.status)) throw { status: 400, message: 'Campagne déjà terminée' }

@@ -106,7 +106,7 @@ async function assertOwnership(businessId, { locationId, tagId }) {
 async function create(businessId, userId, { name, type = 'carousel', locationId, tagId, config = {} }) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, { write: true })
   await assertOwnership(businessId, { locationId, tagId })
 
   const t = type === 'badge' ? 'badge' : 'carousel'
@@ -150,6 +150,7 @@ async function getOne(id, businessId, userId) {
 
 async function update(id, businessId, userId, fields) {
   const widget = await getOne(id, businessId, userId)
+  await assertAccess(await Business.findByPk(businessId), userId, { write: true })
   await assertOwnership(businessId, { locationId: fields.location_id, tagId: fields.tag_id })
 
   if (fields.name !== undefined) widget.name = String(fields.name).trim() || widget.name
@@ -173,6 +174,7 @@ async function update(id, businessId, userId, fields) {
 
 async function remove(id, businessId, userId) {
   const widget = await getOne(id, businessId, userId)
+  await assertAccess(await Business.findByPk(businessId), userId, { write: true })
   await widget.destroy()
 }
 

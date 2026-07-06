@@ -8,6 +8,7 @@ import Button from '../components/common/Button'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
+import TeamSection from '../components/settings/TeamSection'
 
 const COUNTRIES = [
   { code: 'FR', label: 'France' },
@@ -327,6 +328,9 @@ export default function SettingsPage() {
           </div>
           {notifError && <p className="text-sm text-danger mt-2">{notifError}</p>}
         </Section>
+
+        {/* Gestion de l'équipe */}
+        <TeamSection Section={Section} businessId={activeBusiness.id} />
 
         {/* Localisations & fiches Google (gérées ailleurs) */}
         <Section

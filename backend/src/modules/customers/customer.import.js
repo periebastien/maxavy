@@ -23,7 +23,7 @@ const upload = multer({
 async function importCsv(businessId, fileBuffer, userId, locationId) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, { write: true })
 
   locationId = locationId || null
   if (locationId) {

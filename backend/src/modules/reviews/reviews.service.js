@@ -515,7 +515,7 @@ async function setReviewTags(reviewId, businessId, userId, tagIds = []) {
 
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, { write: true })
 
   const review = await Review.findOne({ where: { id: reviewId, business_id: businessId } })
   if (!review) throw { status: 404, message: 'Avis introuvable' }

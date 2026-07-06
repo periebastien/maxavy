@@ -108,10 +108,19 @@ async function update(businessId, data, userId) {
   return business
 }
 
-async function assertAccess(business, userId) {
+// Contrôle d'accès centralisé, gouverne aussi les rôles d'équipe.
+//   - Le propriétaire (owner_id) a TOUJOURS tous les droits — aucun TeamMember n'existe pour lui,
+//     donc le comportement mono-utilisateur historique est strictement inchangé.
+//   - Un membre rattaché (TeamMember accepté) accède au business ; un « viewer » est en lecture seule.
+//   - opts.write === true → exige un rôle d'écriture (owner, admin ou editor).
+// Rétrocompatible : appelé sans opts (défaut lecture), toute la logique existante reste identique.
+async function assertAccess(business, userId, opts = {}) {
   if (business.owner_id === userId) return
   const member = await TeamMember.findOne({ where: { business_id: business.id, user_id: userId } })
-  if (!member) throw { status: 403, message: 'Accès refusé' }
+  if (!member || !member.accepted_at) throw { status: 403, message: 'Accès refusé' }
+  if (opts.write && member.role === 'viewer') {
+    throw { status: 403, message: 'Votre rôle (lecteur) ne permet pas cette action' }
+  }
 }
 
 async function remove(businessId, userId) {

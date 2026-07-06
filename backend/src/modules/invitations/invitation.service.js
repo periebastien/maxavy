@@ -10,7 +10,7 @@ const { sendInvitationEmail } = require('../../services/mail.service')
 async function send({ customerId, channel, locationId, businessId, userId }) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, { write: true })
 
   const customer = await Customer.findOne({ where: { id: customerId, business_id: businessId } })
   if (!customer) throw { status: 404, message: 'Client introuvable' }

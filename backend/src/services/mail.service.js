@@ -63,4 +63,34 @@ async function sendInvitationEmail({ to, firstname, businessName, collectUrl }) 
   })
 }
 
-module.exports = { sendResetEmail, sendInvitationEmail }
+const ROLE_LABELS = { admin: 'Administrateur', editor: 'Éditeur', viewer: 'Lecteur' }
+
+async function sendTeamInviteEmail({ to, businessName, role, acceptUrl, isExistingUser }) {
+  await transporter.sendMail({
+    from: `"Locagain" <${process.env.MAIL_FROM}>`,
+    to,
+    subject: `Invitation à rejoindre ${businessName} sur Locagain`,
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+        <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Vous êtes invité·e</h2>
+        <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
+          Vous avez été invité·e à rejoindre l'équipe de <strong>${businessName}</strong> sur Locagain
+          en tant que <strong>${ROLE_LABELS[role] || role}</strong>.<br><br>
+          ${isExistingUser
+            ? 'Connectez-vous avec votre compte existant pour accepter cette invitation.'
+            : 'Cliquez ci-dessous pour créer votre compte et rejoindre l\'équipe.'}
+        </p>
+        <a href="${acceptUrl}"
+           style="display:inline-block;background:#7C5CFC;color:#fff;font-size:14px;font-weight:600;
+                  padding:12px 28px;border-radius:8px;text-decoration:none;">
+          Accepter l'invitation
+        </a>
+        <p style="color:#9B9BA8;font-size:12px;margin:24px 0 0;">
+          Ce lien est valable 7 jours. Si vous n'attendiez pas cette invitation, ignorez cet email.
+        </p>
+      </div>
+    `,
+  })
+}
+
+module.exports = { sendResetEmail, sendInvitationEmail, sendTeamInviteEmail }

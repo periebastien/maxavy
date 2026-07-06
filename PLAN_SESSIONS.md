@@ -77,7 +77,7 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 | # | Session | Contenu |
 |---|---------|---------|
 | 29 | Paramètres entreprise | Infos générales, notifications, slug |
-| 30 | Gestion équipe | Invitation membres par email, rôles (admin/éditeur/lecteur) |
+| 30 | Gestion équipe | ✅ Fait (2026-07-06) — module `team/` (invite/accept/list/role/remove), enforcement des rôles via `assertAccess(..., { write })` rétrocompatible (owner intact, viewer lecture seule) sur customers/campaigns/invitations/widgets/reviews, migration additive 56 `team_invitations` (invités sans compte, email chiffré), UI section Équipe dans Settings + page publique `/invitation`. Testé réel 28/28. Voir `PROGRESS.md` Phase 9 |
 | 31 | Profil & sécurité | Page profil utilisateur, changement mot de passe |
 | 32 | Super Admin | Panel admin global (tous les comptes, activation modules) |
 | 33 | Polish UI | Responsive mobile, messages d'erreur, états vides, loaders |

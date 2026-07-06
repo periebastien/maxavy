@@ -6,10 +6,10 @@ const Invitation = require('../../models/Invitation')
 const { assertAccess } = require('../businesses/business.service')
 const { encrypt, decrypt } = require('../../config/encryption')
 
-async function assertBusinessAccess(businessId, userId) {
+async function assertBusinessAccess(businessId, userId, opts = {}) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
-  await assertAccess(business, userId)
+  await assertAccess(business, userId, opts)
   return business
 }
 
@@ -22,7 +22,7 @@ function decryptCustomer(customer) {
 
 async function create(data, businessId, userId) {
   if (!businessId) throw { status: 400, message: 'business_id requis' }
-  await assertBusinessAccess(businessId, userId)
+  await assertBusinessAccess(businessId, userId, { write: true })
 
   let locationId = data.location_id || null
   if (locationId) {
@@ -80,7 +80,7 @@ async function getOne(id, userId) {
 async function update(id, data, userId) {
   const customer = await Customer.findByPk(id)
   if (!customer) throw { status: 404, message: 'Client introuvable' }
-  await assertBusinessAccess(customer.business_id, userId)
+  await assertBusinessAccess(customer.business_id, userId, { write: true })
 
   const allowed = ['firstname', 'lastname', 'email', 'phone', 'consent_given', 'status']
   const changes = Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)))
@@ -99,7 +99,7 @@ async function update(id, data, userId) {
 async function remove(id, userId) {
   const customer = await Customer.findByPk(id)
   if (!customer) throw { status: 404, message: 'Client introuvable' }
-  await assertBusinessAccess(customer.business_id, userId)
+  await assertBusinessAccess(customer.business_id, userId, { write: true })
   await customer.destroy()
 }
 
