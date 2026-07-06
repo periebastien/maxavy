@@ -275,8 +275,10 @@ Champ `campaign_id` et `scheduled_at` ajoutés à la table `invitations`.
 ### MODULE 7 — SURVEILLANCE DES AVIS GOOGLE
 **Routes API :** `/api/reviews/*`, `/api/google/*`
 
-- Connexion OAuth Google Business Profile (chaque client autorise son propre compte — voir clarification ci-dessous)
-- Récupération automatique des avis Google (cron quotidien)
+> **⚠️ Mise à jour source de données (2026-07-02) — synchro par DataForSEO, plus par OAuth GMB.** L'API GMB (quota `mybusinessaccountmanagement` bloqué, projet Cloud non vérifié) est abandonnée pour la **lecture** des avis. La récupération passe désormais par **DataForSEO** (`business_data/google/reviews`, mêmes identifiants que le geogrid §9.5), **sans OAuth** : toute localisation ayant un `google_place_id` est synchronisable. Cadence **gatée par plan** (`module_quotas.reviews` : Starter quotidien, Pro 6h, Agence horaire, Gratuit exclu ; éditable Super Admin). ⚠️ DataForSEO est en **lecture seule** → la connexion OAuth ci-dessous n'est plus requise pour lire ; elle reste envisagée uniquement pour **publier** une réponse aux avis (2ᵉ temps, avec génération IA). Détail : `PROGRESS.md` Phase 6.
+
+- ~~Connexion OAuth Google Business Profile~~ → remplacée par DataForSEO pour la lecture (voir note ci-dessus). OAuth conservé inerte, éventuellement pour l'écriture des réponses.
+- Récupération automatique des avis Google (cron : boucle 60 s, cadence par fiche selon le plan ; backfill au 1er passage puis incrémental)
 - Liste des avis : auteur, note, texte, date, statut répondu/non répondu
 - Filtre par note
 - **Tags d'avis** : l'utilisateur classe ses avis avec des tags libres définis par entreprise (ex. « Coup de cœur », « Service », « Accueil »). Un avis peut porter plusieurs tags (relation N–N). Les tags servent ensuite à peupler sélectivement les widgets (voir Module 8). Tags 100 % manuels au MVP ; règles d'auto-tagging (ex. par note) repoussées en extension.
@@ -748,7 +750,7 @@ Cette liste sert de **feuille de route commerciale et technique**. Chaque module
 
 | Module | Description | Dépendances |
 |---|---|---|
-| **Suivi des avis de la concurrence** | Voir le nombre d'avis postés par mois par les concurrents (entreprises similaires choisies par le client), avec courbes de comparaison pour savoir où on se situe et où on doit progresser par rapport à eux | Google Places API (récupération du nombre d'avis + note d'une fiche concurrente, données publiques, pas d'OAuth nécessaire) |
+| **Suivi des avis de la concurrence** | Voir le nombre d'avis postés par mois par les concurrents (entreprises similaires choisies par le client), avec courbes de comparaison pour savoir où on se situe et où on doit progresser par rapport à eux | **DataForSEO** `business_data/google/reviews` (décision 2026-07-03 — Places API ne renvoie pas l'historique, seulement le total du moment ; DataForSEO fournit les timestamps → rythme mensuel immédiat, même provider que la synchro d'avis Module 7). **Cadré : sessions AC1→AC3**, spec `AVIS_CONCURRENTS_FR.md` |
 
 **Détail fonctionnel anticipé pour ce module :**
 - Le client ajoute 1 à N fiches concurrentes (recherche par nom via Google Places, comme pour sa propre fiche)
@@ -885,13 +887,14 @@ Vu que les modules Publications/Photos partagent la logique de planification et 
 
 ### Gestion des plans (Super Admin)
 
-Les plans sont stockés en base de données (table `plans`) et **entièrement gérables depuis le panel Super Admin** sans redéploiement :
+Les plans sont stockés en base de données (table `plans`) et **entièrement gérables depuis le panel Super Admin** (`/admin/plans`, réservé `role=superadmin`) sans redéploiement :
 - Modifier le nom, la description, le prix, les crédits mensuels
 - Modifier les `stripe_price_id` (mensuel/annuel) et `stripe_product_id`
 - Modifier les fonctionnalités affichées (`features` JSONB — liste de strings)
 - Activer / désactiver un plan (champ `active`)
+- **Limiter le nombre d'entreprises par propriétaire** (`max_businesses`) et **le nombre de localisations par entreprise** (`max_locations`) — `NULL` = illimité. Plafond effectif = le plus permissif entre le plan Gratuit et les plans des entreprises déjà possédées par le propriétaire (un plan illimité rend l'ensemble illimité). Appliqué réellement à la création (`business.service.js`/`location.service.js`), pas seulement affiché.
 
-Cela permet de changer les tarifs ou d'ajouter un plan sans toucher au code. Le panel Super Admin (session 32) contiendra une interface CRUD complète pour les plans.
+Cela permet de changer les tarifs ou d'ajouter un plan sans toucher au code. **Implémenté (session 32, 2026-07-04)** : CRUD complet des plans, plus deux volets supplémentaires dans le même panel — **Comptes** (`/admin/accounts`, vue cross-tenant : toutes les entreprises avec propriétaire/plan/crédits/localisations, changement de plan, ajout de crédits) et **Modules** (`/admin/modules`, activation d'un module hors plan par entreprise via la table `business_modules` — écriture disponible, mais aucun module métier ne consulte encore ce flag ; le gating réel reste `plans.module_quotas`).
 
 **Gating des modules par plan (au-delà des crédits).** Certains modules ne sont pas facturés à l'usage (crédits) mais **inclus ou non selon le plan**, avec des quotas — le champ `module_quotas` (JSONB) du plan porte cette configuration, **éditable en Super Admin**. Premier cas : le module **« Suivi de positionnement » (geogrid, §9.5)**. La clé `rank_tracking` porte des **plafonds** que l'utilisateur ne peut pas dépasser mais choisit librement en dessous :
 - **Gratuit** : exclu (module masqué/verrouillé).
@@ -900,9 +903,9 @@ Cela permet de changer les tarifs ou d'ajouter un plan sans toucher au code. Le 
 - **Agence** : 50 / 13×13 / carré+cercle / mensuel-hebdo-**quotidien** / 10 concurrents.
 - Toujours borné par le nombre de localisations autorisé par le plan.
 
-> Ces plafonds (`max_keywords`, `max_grid_size`, `allowed_shapes`, `allowed_frequencies`, `max_competitors`, `enabled`) sont **modifiables depuis le panel Super Admin sans redéploiement** — écriture de `plans.module_quotas.rank_tracking`. Implémentation prévue en **session G12** (`PLAN_SESSIONS.md` Phase 11 ; détail dans `GEOGRID_REFONTE_FR.md` §11).
+> Ces plafonds (`max_keywords`, `max_grid_size`, `allowed_shapes`, `allowed_frequencies`, `max_competitors`, `grid_spacing_m`, `enabled`) sont **modifiables depuis le panel Super Admin sans redéploiement** — écriture de `plans.module_quotas.rank_tracking`. **Implémenté (session G12, complété en session 32, 2026-07-04)** : `/admin/plans` (`GET`/`PUT .../rank-tracking`), validation stricte des bornes ; `grid_spacing_m` contraint aux mêmes valeurs que le wizard de configuration (250/500/750/1000/1500/2000 m — l'espacement change l'échelle géographique, jamais le nombre de points). Aucun cache : la lecture du quota (`getQuota`) relit le plan à chaque contrôle, effet immédiat. Détail : `PLAN_SESSIONS.md` Phase 11, `GEOGRID_REFONTE_FR.md` §11.
 
-La table `business_modules` (`module_key`, §6) reste disponible pour **activer un module hors plan** (ex. bêta chez un client précis), en surcouche du gating par plan.
+La table `business_modules` (`module_key`, §6) reste disponible pour **activer un module hors plan** (ex. bêta chez un client précis), en surcouche du gating par plan. **CRUD Super Admin implémenté** (`/admin/modules`, session 32) — active/désactive un `module_key` par entreprise, mais reste pour l'instant une écriture pure : aucun code métier ne lit ce flag pour décider si un module est actif.
 
 ---
 
@@ -919,7 +922,7 @@ La table `business_modules` (`module_key`, §6) reste disponible pour **activer 
 | **8** | Widgets basiques (1-2 types) |
 | **9** | Paramètres, équipe, finitions UI |
 | **10** | Tests, corrections, déploiement sur ton serveur |
-| **Post-MVP** | Modules futurs (§9) — priorité 1 : suivi des avis de la concurrence ; puis **suivi de positionnement (geogrid, §9.5)** — sessions G1→G5, voir `PLAN_SESSIONS.md` Phase 11 |
+| **Post-MVP** | Modules futurs (§9) — priorité 1 : **suivi des avis de la concurrence** (cadré 2026-07-03, sessions AC1→AC3, spec `AVIS_CONCURRENTS_FR.md` + `PLAN_SESSIONS.md` Phase 12) ; puis **suivi de positionnement (geogrid, §9.5)** — sessions G1→G12, voir `PLAN_SESSIONS.md` Phase 11 |
 
 ---
 

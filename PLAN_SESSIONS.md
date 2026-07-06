@@ -53,8 +53,8 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 | # | Session | Contenu |
 |---|---------|---------|
 | 20 | OAuth Google | Flow OAuth Business Profile, stockage token chiffré |
-| 21 | Sync avis | Récupération avis via API, cron quotidien, stockage en base |
-| 22 | Interface avis | Liste avis (auteur, note, date, statut), filtres, réponse aux avis |
+| 21 | Sync avis | ✅ (2026-07-02) **DataForSEO** (`business_data/google/reviews`), table `review_sync_jobs`, cron 60s backfill/incrémental, gating par plan (`module_quotas.reviews`), échelonnement déterministe. GMB abandonné (quota bloqué). Voir `PROGRESS.md` Phase 6 |
+| 22 | Interface avis | 🟡 Lecture faite (`ReviewsPage` + sync async + polling). **Réponse aux avis = 2ᵉ temps** : génération IA (prompt configurable) ; ⚠️ DataForSEO ne publie pas → canal d'écriture à trancher |
 
 ## PHASE 7 — CRÉDITS & STRIPE (Semaine 7)
 
@@ -120,10 +120,21 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 
 > *v2 ultérieure* : rapport **PDF** avec courbe (SVG généré côté serveur).
 
+## PHASE 12 — SUIVI DES AVIS DE LA CONCURRENCE — *post-MVP, priorité 1*
+
+> Rythme mensuel d'avis : ma fiche vs concurrents (objectif : faire mieux chaque mois). Spec dédiée : **`AVIS_CONCURRENTS_FR.md`** (cadré 2026-07-03).
+> Décisions : source **DataForSEO** (pas Places : pas d'historique) ; liste de concurrents **partagée** avec le positionnement *pour l'instant* (données découplées par `place_id` → séparation future triviale) ; quota = `rank_tracking.max_competitors` (3/5/10, éditable Super Admin via G12) ; synchro **quotidienne** échelonnée.
+
+| # | Session | Contenu |
+|---|---------|---------|
+| AC1 | Backend — données & synchro | Migrations 47-49 (`competitor_reviews`, `review_competitor_tracking`, `review_sync_jobs.competitor_place_id`), réconciliation avec la liste geogrid, extension du cron sync-reviews (backfill priority à l'ajout, quotidien standard), **test réel DataForSEO** |
+| AC2 | Backend — stats mensuelles | `GET /reviews/competitors/stats` : agrégat SQL par mois, règle de complétude, série « ma fiche », `available_years` |
+| AC3 | Frontend — page Concurrents (avis) | Sidebar AVIS > Concurrents (`/reviews/concurrents`), gestion liste partagée (PlaceSearch + détectés, quota), carte « Ce mois-ci », courbe 12 mois style geogrid (`TrendChart` étendu, axe Y normal), tableau mensuel, sélecteur d'année, états vides/gating |
+
 ---
 
 ## Résumé
 - **36 sessions** pour le MVP complet
 - **Ensuite (post-MVP)** :
-  - Module « Suivi des avis de la concurrence » (priorité 1)
+  - Module « Suivi des avis de la concurrence » — **cadré 2026-07-03**, sessions **AC1→AC3** (Phase 12 ci-dessus ; spec `AVIS_CONCURRENTS_FR.md`)
   - Module « Suivi de positionnement (geogrid / heatmap) » — socle **G1→G4** livré, refonte **G5→G12** (Phase 11 ci-dessus ; `GEOGRID_REFONTE_FR.md` + `GEOGRID_DESIGN_FR.md` + cahier §9.5)
