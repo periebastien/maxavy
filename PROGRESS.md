@@ -864,6 +864,17 @@ Logique de la page collecte : note > 4 → ce lien ; note ≤ 3 → formulaire p
 
 ---
 
+## Session sécurité — audit complet + correctifs (2026-07-06) ✅
+
+Audit 3 agents (backend, frontend/config, revue produit). Points forts confirmés : isolation multi-tenant systématique, AES-256-GCM correct (IV aléatoire), anti-XSS widget public (esc() + Shadow DOM), zéro secret dans git (historique inclus), SQL toujours paramétré. Correctifs appliqués et vérifiés en réel (commit `dde3ab6`) :
+- **Critique** — webhook Stripe : `express.raw` monté avant `express.json` global (la signature HMAC était invérifiable, body déjà parsé). Testé : signature bidon → 400 propre. Dépendance npm `stripe` manquante installée au passage.
+- **Élevé** — CORS `origin:'*'` + rate limiter dédié (300/5 min) sur les 3 routes publiques widgets seulement (les widgets embarqués sur sites tiers étaient bloqués par le CORS strict global) ; API privée inchangée (vérifié).
+- **Moyen** — `jwt.verify` avec `{algorithms:['HS256']}` (3 appels) ; suppression `middlewares/check-credits.js` (code mort, IDOR latent) ; front : prop `requireRole` sur `PrivateRoute` pour `/admin/*` (checks dupliqués retirés des 3 pages admin) ; gestion 401 centralisée dans `lib/api.js` (purge token + redirect /login, routes d'auth exclues).
+- Dette notée non traitée : token JWT en localStorage (migration cookie httpOnly à planifier), AbortController absent des fetchs front, vuln `vite` dev-only (npm audit).
+- Même session : 4 commits de rattrapage des sessions 21-32/AC/G non committées + refactor CLAUDE.md (30 Ko → 7,4 Ko, ancien bloc archivé ci-dessous).
+
+---
+
 # Archive — ancien bloc « État du projet » de CLAUDE.md (déplacé le 2026-07-06)
 
 Sessions 1–26 terminées. Phase 7 complète.
