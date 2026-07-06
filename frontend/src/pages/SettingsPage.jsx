@@ -31,6 +31,33 @@ const TIMEZONES = [
   { value: 'Africa/Dakar',      label: 'Africa/Dakar (UTC+0)' },
 ]
 
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+const NOTIF_OPTIONS = [
+  { key: 'email_new_review',    label: 'Nouvel avis reçu',       description: 'Recevoir un email à chaque nouvel avis synchronisé.' },
+  { key: 'email_negative_review', label: 'Avis négatif (≤ 3★)',  description: 'Alerte immédiate en cas d\'avis négatif.' },
+  { key: 'email_weekly_report', label: 'Rapport hebdomadaire',   description: 'Résumé hebdomadaire de votre e-réputation.' },
+  { key: 'email_scan_report',   label: 'Rapports de positionnement', description: 'Notification à chaque rapport geogrid terminé.' },
+]
+
+function Toggle({ checked, onChange, label, description }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="w-full flex items-center justify-between gap-4 py-2 text-left"
+    >
+      <div>
+        <p className="text-sm font-medium text-text-primary">{label}</p>
+        {description && <p className="text-xs text-text-secondary mt-0.5">{description}</p>}
+      </div>
+      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-gray-200'}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+      </span>
+    </button>
+  )
+}
+
 function Section({ title, description, children }) {
   return (
     <div className="bg-white border border-border rounded-xl">
@@ -49,7 +76,12 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [form, setForm]       = useState({ name: '', website_url: '', country: 'FR', timezone: 'Europe/Paris' })
+  const [form, setForm]       = useState({
+    name: '', website_url: '', country: 'FR', timezone: 'Europe/Paris',
+    logo_url: '', contact_email: '', contact_phone: '', address: '', slug: '',
+  })
+  const [notifs, setNotifs]   = useState({})
+  const [notifError, setNotifError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError]     = useState('')
@@ -65,7 +97,13 @@ export default function SettingsPage() {
       website_url: activeBusiness.website_url || '',
       country:     activeBusiness.country     || 'FR',
       timezone:    activeBusiness.timezone    || 'Europe/Paris',
+      logo_url:      activeBusiness.logo_url      || '',
+      contact_email: activeBusiness.contact_email || '',
+      contact_phone: activeBusiness.contact_phone || '',
+      address:       activeBusiness.address       || '',
+      slug:          activeBusiness.slug          || '',
     })
+    setNotifs(activeBusiness.notification_prefs || {})
     loadGoogleStatus()
   }, [activeBusiness?.id])
 
@@ -115,6 +153,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleNotifChange(key, value) {
+    const next = { ...notifs, [key]: value }
+    setNotifs(next)
+    setNotifError('')
+    try {
+      await api.patch(`/api/v1/businesses/${activeBusiness.id}`, { notification_prefs: next })
+      await refresh()
+    } catch (err) {
+      setNotifs(notifs)
+      setNotifError(err.message)
+    }
+  }
+
   function set(field) {
     return e => { setSuccess(false); setForm(f => ({ ...f, [field]: e.target.value })) }
   }
@@ -122,6 +173,11 @@ export default function SettingsPage() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.name.trim()) { setError('Le nom est requis'); return }
+    const slug = form.slug.trim()
+    if (slug && !SLUG_RE.test(slug)) {
+      setError('Slug invalide : minuscules, chiffres et tirets uniquement (ex : mon-entreprise)')
+      return
+    }
     setLoading(true); setError(''); setSuccess(false)
     try {
       await api.patch(`/api/v1/businesses/${activeBusiness.id}`, {
@@ -129,6 +185,12 @@ export default function SettingsPage() {
         website_url: form.website_url.trim() || null,
         country:     form.country,
         timezone:    form.timezone,
+        logo_url:      form.logo_url.trim()      || null,
+        contact_email: form.contact_email.trim() || null,
+        contact_phone: form.contact_phone.trim() || null,
+        address:       form.address.trim()       || null,
+        ...(slug ? { slug } : {}),
+        notification_prefs: notifs,
       })
       await refresh()
       setSuccess(true)
@@ -175,6 +237,63 @@ export default function SettingsPage() {
               </Select>
             </div>
 
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label="Logo (URL)"
+                  type="url"
+                  value={form.logo_url}
+                  onChange={set('logo_url')}
+                  placeholder="https://www.monsite.com/logo.png"
+                />
+              </div>
+              {form.logo_url.trim() && (
+                <img
+                  src={form.logo_url.trim()}
+                  alt="Logo"
+                  className="w-10 h-10 rounded-lg object-contain border border-border bg-white shrink-0"
+                  onError={e => { e.currentTarget.style.display = 'none' }}
+                />
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Email de contact"
+                type="email"
+                value={form.contact_email}
+                onChange={set('contact_email')}
+                placeholder="contact@monsite.com"
+              />
+              <Input
+                label="Téléphone"
+                type="tel"
+                value={form.contact_phone}
+                onChange={set('contact_phone')}
+                placeholder="01 23 45 67 89"
+              />
+            </div>
+            <Input
+              label="Adresse"
+              value={form.address}
+              onChange={set('address')}
+              placeholder="12 rue de la République, 75001 Paris"
+            />
+
+            <div>
+              <Input
+                label="Slug public"
+                value={form.slug}
+                onChange={set('slug')}
+                placeholder="mon-entreprise"
+              />
+              <p className={`text-xs mt-1 ${form.slug.trim() && !SLUG_RE.test(form.slug.trim()) ? 'text-danger' : 'text-text-tertiary'}`}>
+                {form.slug.trim() && !SLUG_RE.test(form.slug.trim())
+                  ? 'Format invalide : minuscules, chiffres et tirets uniquement.'
+                  : 'Identifiant public de votre entreprise (kebab-case, unique).'}
+              </p>
+            </div>
+
             {error && <p className="text-sm text-danger">{error}</p>}
 
             <div className="flex items-center gap-3 pt-1">
@@ -188,6 +307,25 @@ export default function SettingsPage() {
               )}
             </div>
           </form>
+        </Section>
+
+        {/* Préférences de notifications */}
+        <Section
+          title="Notifications"
+          description="Choisissez les emails que vous souhaitez recevoir."
+        >
+          <div className="divide-y divide-border">
+            {NOTIF_OPTIONS.map(opt => (
+              <Toggle
+                key={opt.key}
+                label={opt.label}
+                description={opt.description}
+                checked={!!notifs[opt.key]}
+                onChange={val => handleNotifChange(opt.key, val)}
+              />
+            ))}
+          </div>
+          {notifError && <p className="text-sm text-danger mt-2">{notifError}</p>}
         </Section>
 
         {/* Localisations & fiches Google (gérées ailleurs) */}

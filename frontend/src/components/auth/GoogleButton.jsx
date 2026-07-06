@@ -8,8 +8,8 @@ export default function GoogleButton({ onError }) {
 
   async function handleSuccess(credentialResponse) {
     try {
-      await loginWithGoogle(credentialResponse.credential)
-      navigate('/dashboard')
+      const data = await loginWithGoogle(credentialResponse.credential)
+      navigate(data.user?.role === 'superadmin' ? '/admin/plans' : '/dashboard')
     } catch (err) {
       onError?.(err.message)
     }

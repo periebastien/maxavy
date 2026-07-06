@@ -11,6 +11,11 @@ const Business = sequelize.define('Business', {
   country:              { type: DataTypes.STRING, defaultValue: 'FR' },
   timezone:             { type: DataTypes.STRING, defaultValue: 'Europe/Paris' },
   feedback_page_config: { type: DataTypes.JSONB, defaultValue: {} },
+  logo_url:             { type: DataTypes.STRING },
+  contact_email:        { type: DataTypes.STRING },
+  contact_phone:        { type: DataTypes.STRING },
+  address:              { type: DataTypes.STRING },
+  notification_prefs:   { type: DataTypes.JSONB, defaultValue: {} },
   credit_balance:       { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName: 'businesses',

@@ -10,11 +10,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
 
   if (isAuthenticated) {
-    navigate('/dashboard', { replace: true })
+    navigate(user?.role === 'superadmin' ? '/admin/plans' : '/dashboard', { replace: true })
     return null
   }
 
@@ -23,8 +23,8 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
-      navigate('/dashboard')
+      const data = await login(email, password)
+      navigate(data.user?.role === 'superadmin' ? '/admin/plans' : '/dashboard')
     } catch (err) {
       setError(err.message)
     } finally {

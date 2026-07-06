@@ -1,6 +1,16 @@
 const Location = require('../../models/Location')
 const Business = require('../../models/Business')
+const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
+
+// Plafond du nombre de localisations pour une entreprise : celui de son plan, ou celui du plan
+// Gratuit si l'entreprise n'a pas encore de plan actif (plan_id NULL). NULL = illimité.
+async function maxLocationsFor(business) {
+  const plan = business.plan_id
+    ? await Plan.findByPk(business.plan_id)
+    : await Plan.findOne({ where: { name: 'Gratuit' } })
+  return plan?.max_locations ?? null
+}
 
 // Vérifie que l'utilisateur a accès au business (propriétaire ou membre d'équipe).
 // Garantit l'isolation multi-tenant : on ne touche jamais une location d'un business non accessible.
@@ -43,7 +53,13 @@ function validateLatLng(data) {
 async function create(data, userId) {
   const { business_id, name, google_place_id } = data
   if (!business_id) throw { status: 400, message: 'business_id requis' }
-  await assertBusinessAccess(business_id, userId)
+  const business = await assertBusinessAccess(business_id, userId)
+
+  const limit = await maxLocationsFor(business)
+  if (limit !== null) {
+    const count = await Location.count({ where: { business_id } })
+    if (count >= limit) throw { status: 403, message: `Limite de ${limit} localisation(s) atteinte pour ce plan` }
+  }
 
   if (!name || !name.trim()) throw { status: 400, message: 'Le nom de la localisation est requis' }
   if (!google_place_id)      throw { status: 400, message: 'Une fiche Google (google_place_id) est requise' }

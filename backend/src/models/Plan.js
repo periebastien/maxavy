@@ -14,6 +14,8 @@ const Plan = sequelize.define('Plan', {
   stripe_price_id_yearly: { type: DataTypes.STRING },
   active:                { type: DataTypes.BOOLEAN, defaultValue: true },
   sort_order:            { type: DataTypes.INTEGER, defaultValue: 0 },
+  max_businesses:        { type: DataTypes.INTEGER }, // NULL = illimité. Limite le nombre d'entreprises qu'un propriétaire peut créer.
+  max_locations:         { type: DataTypes.INTEGER }, // NULL = illimité. Limite le nombre de localisations par entreprise.
 }, { tableName: 'plans', underscored: true })
 
 module.exports = Plan

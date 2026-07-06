@@ -2,7 +2,20 @@ const { Op } = require('sequelize')
 const Business = require('../../models/Business')
 const TeamMember = require('../../models/TeamMember')
 const Location = require('../../models/Location')
+const Plan = require('../../models/Plan')
 const { grantWelcomeCredits } = require('../credits/credits.service')
+
+// Plafond du nombre d'entreprises qu'un propriétaire peut créer. Prend le plafond le plus
+// permissif entre le plan Gratuit (base par défaut) et les plans des entreprises déjà possédées
+// (si l'une d'elles est illimitée — max_businesses NULL — l'ensemble reste illimité).
+async function effectiveMaxBusinesses(userId, ownedBusinesses) {
+  const planIds = [...new Set(ownedBusinesses.map(b => b.plan_id).filter(Boolean))]
+  const plans = planIds.length ? await Plan.findAll({ where: { id: { [Op.in]: planIds } } }) : []
+  const gratuit = await Plan.findOne({ where: { name: 'Gratuit' } })
+  const limits = [gratuit?.max_businesses, ...plans.map(p => p.max_businesses)]
+  if (limits.some(l => l === null || l === undefined)) return null
+  return Math.max(...limits)
+}
 
 function slugify(str) {
   return str
@@ -24,6 +37,12 @@ async function uniqueSlug(name) {
 }
 
 async function create({ name, website_url, country, timezone }, userId) {
+  const owned = await Business.findAll({ where: { owner_id: userId } })
+  const limit = await effectiveMaxBusinesses(userId, owned)
+  if (limit !== null && owned.length >= limit) {
+    throw { status: 403, message: `Limite de ${limit} entreprise(s) atteinte pour votre plan` }
+  }
+
   const slug = await uniqueSlug(name)
   const business = await Business.create({
     name, slug,
@@ -61,8 +80,30 @@ async function update(businessId, data, userId) {
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
   if (business.owner_id !== userId) throw { status: 403, message: 'Seul le propriétaire peut modifier' }
 
-  const allowed = ['name', 'website_url', 'country', 'timezone', 'feedback_page_config']
+  const allowed = [
+    'name', 'website_url', 'country', 'timezone', 'feedback_page_config',
+    'logo_url', 'contact_email', 'contact_phone', 'address', 'notification_prefs', 'slug',
+  ]
   const changes = Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)))
+
+  if (changes.slug !== undefined) {
+    const slug = String(changes.slug || '').trim()
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
+      throw { status: 400, message: 'Slug invalide : minuscules, chiffres et tirets uniquement (kebab-case)' }
+    }
+    if (slug !== business.slug) {
+      const taken = await Business.findOne({ where: { slug, id: { [Op.ne]: business.id } } })
+      if (taken) throw { status: 409, message: 'Ce slug est déjà utilisé' }
+    }
+    changes.slug = slug
+  }
+
+  if (changes.notification_prefs !== undefined) {
+    if (typeof changes.notification_prefs !== 'object' || Array.isArray(changes.notification_prefs) || changes.notification_prefs === null) {
+      throw { status: 400, message: 'notification_prefs doit être un objet' }
+    }
+  }
+
   await business.update(changes)
   return business
 }

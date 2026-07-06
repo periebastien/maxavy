@@ -1,11 +1,10 @@
 const router = require('express').Router()
-const ctrl = require('./credits.controller')
+const ctrl = require('./admin-accounts.controller')
 const { authMiddleware } = require('../../middlewares/auth.middleware')
 const { superAdminMiddleware } = require('../../middlewares/super-admin.middleware')
 
-router.use(authMiddleware)
-router.get('/balance',  ctrl.balance)
-router.get('/history',  ctrl.history)
-router.post('/add',     superAdminMiddleware, ctrl.add)
+router.use(authMiddleware, superAdminMiddleware)
+router.get('/', ctrl.list)
+router.put('/:businessId/plan', ctrl.updatePlan)
 
 module.exports = router
