@@ -8,6 +8,7 @@ const Review = sequelize.define('Review', {
   platform:         { type: DataTypes.STRING, defaultValue: 'google' },
   external_id:      { type: DataTypes.STRING },
   author_name:      { type: DataTypes.STRING },
+  author_image_url: { type: DataTypes.TEXT },
   rating:           { type: DataTypes.INTEGER },
   text:             { type: DataTypes.TEXT },
   sentiment:        { type: DataTypes.STRING },

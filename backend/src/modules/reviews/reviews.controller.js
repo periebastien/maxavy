@@ -14,12 +14,22 @@ async function list(req, res) {
   }
 }
 
+// Enqueue une synchro DataForSEO (asynchrone) — le front poll ensuite GET /sync/status.
 async function sync(req, res) {
   try {
     const result = await service.triggerSync(req.query.business_id, req.user.id)
     res.json(result)
   } catch (err) {
     console.error('[reviews/sync]', err.message)
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+async function syncStatus(req, res) {
+  try {
+    const result = await service.getSyncStatus(req.query.business_id, req.user.id)
+    res.json(result)
+  } catch (err) {
     res.status(err.status || 500).json({ message: err.message })
   }
 }
@@ -33,4 +43,22 @@ async function setTags(req, res) {
   }
 }
 
-module.exports = { list, sync, setTags }
+async function competitorStats(req, res) {
+  try {
+    const result = await service.getCompetitorStats(req.query.business_id, req.user.id, req.query.location_id, req.query.year)
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+async function competitorSync(req, res) {
+  try {
+    const result = await service.triggerCompetitorSync(req.query.business_id, req.user.id, req.body.location_id, req.body.place_id)
+    res.json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+module.exports = { list, sync, syncStatus, setTags, competitorStats, competitorSync }
