@@ -97,7 +97,7 @@ export default function GeogridSuiviPage() {
         if (cancelled) return
         setQuota(q)
         setKeywords(kws)
-        const done = allRuns.filter(r => r.status === 'done').sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        const done = allRuns.filter(r => r.status === 'done' && !r.has_failures).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         setRuns(done)
         if (done.length) setSelectedRunId(done[0].id)
       })
@@ -262,7 +262,7 @@ export default function GeogridSuiviPage() {
           <select value={selectedRunId || ''} onChange={e => setSelectedRunId(e.target.value)}
             className="h-9 px-3 rounded-lg border border-border text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent">
             {runs.map(r => (
-              <option key={r.id} value={r.id}>{fmtDate(r.createdAt)}{r.has_failures ? ' (partiel)' : ''}</option>
+              <option key={r.id} value={r.id}>{fmtDate(r.createdAt)}</option>
             ))}
           </select>
           {loadingDetail && <Loader2 size={15} className="animate-spin text-accent" />}
@@ -270,52 +270,6 @@ export default function GeogridSuiviPage() {
 
         {error && (
           <div className="text-sm text-danger bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>
-        )}
-
-        {/* Graphe pleine largeur */}
-        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-text-primary">
-              Évolution · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
-            </h3>
-            <TrendControls rangePreset={rangePreset} setRangePreset={setRangePreset}
-              granularity={granularity} setGranularity={setGranularity}
-              aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
-          </div>
-          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
-          <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
-        </div>
-
-        {/* Carte pleine largeur */}
-        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-text-primary">
-            Carte · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
-            {selectedRun && <span className="font-normal text-text-tertiary"> · {fmtDate(selectedRun.createdAt)}</span>}
-          </h3>
-          {mapLoading ? (
-            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-accent" /></div>
-          ) : mapData && mapData.points?.length > 0 ? (
-            <>
-              <GeogridMap center={mapData.center} points={mapData.points} heightClass="h-[600px]" />
-              <RankLegend />
-            </>
-          ) : (
-            <p className="text-sm text-text-tertiary py-10 text-center">Aucune donnée cartographique pour ce rapport.</p>
-          )}
-        </div>
-
-        {/* Métriques + concurrents (mode mot-clé uniquement) */}
-        {!isGlobal && scanDetail && (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <MetricCard label="Position moyenne (visible)" value={scanDetail.scan.arp ?? '—'} sub="ARP — là où vous apparaissez" />
-              <MetricCard label="Position moyenne (couverture)" value={scanDetail.scan.atrp ?? '—'} sub="ATRP — toute la grille" />
-              <MetricCard label="Part de voix" value={scanDetail.scan.solv != null ? `${Math.round(scanDetail.scan.solv)}%` : '—'} sub="SoLV — points en Top 3" />
-              <MetricCard label="Note de la fiche" value={scanDetail.scan.rating_snapshot ?? '—'}
-                sub={scanDetail.scan.review_count_snapshot != null ? `${scanDetail.scan.review_count_snapshot} avis` : 'au moment du scan'} />
-            </div>
-            <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />
-          </>
         )}
 
         {/* Tableau d'évolution par mot-clé (rapport sélectionné) — clic = focus sur ce mot-clé */}
@@ -350,6 +304,52 @@ export default function GeogridSuiviPage() {
             </table>
           </div>
         )}
+
+        {/* Métriques + concurrents (mode mot-clé uniquement) */}
+        {!isGlobal && scanDetail && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <MetricCard label="Position moyenne (visible)" value={scanDetail.scan.arp ?? '—'} sub="ARP — là où vous apparaissez" />
+              <MetricCard label="Position moyenne (couverture)" value={scanDetail.scan.atrp ?? '—'} sub="ATRP — toute la grille" />
+              <MetricCard label="Part de voix" value={scanDetail.scan.solv != null ? `${Math.round(scanDetail.scan.solv)}%` : '—'} sub="SoLV — points en Top 3" />
+              <MetricCard label="Note de la fiche" value={scanDetail.scan.rating_snapshot ?? '—'}
+                sub={scanDetail.scan.review_count_snapshot != null ? `${scanDetail.scan.review_count_snapshot} avis` : 'au moment du scan'} />
+            </div>
+            <CompetitorTable scan={scanDetail.scan} competitors={scanDetail.competitors} />
+          </>
+        )}
+
+        {/* Carte pleine largeur */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-text-primary">
+            Carte · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
+            {selectedRun && <span className="font-normal text-text-tertiary"> · {fmtDate(selectedRun.createdAt)}</span>}
+          </h3>
+          {mapLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-accent" /></div>
+          ) : mapData && mapData.points?.length > 0 ? (
+            <>
+              <GeogridMap center={mapData.center} points={mapData.points} heightClass="h-[600px]" />
+              <RankLegend />
+            </>
+          ) : (
+            <p className="text-sm text-text-tertiary py-10 text-center">Aucune donnée cartographique pour ce rapport.</p>
+          )}
+        </div>
+
+        {/* Graphe pleine largeur */}
+        <div className="bg-white border border-border rounded-2xl p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-text-primary">
+              Évolution · {isGlobal ? 'Moyenne globale' : selectedKeyword?.keyword}
+            </h3>
+            <TrendControls rangePreset={rangePreset} setRangePreset={setRangePreset}
+              granularity={granularity} setGranularity={setGranularity}
+              aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
+          </div>
+          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
+          <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
+        </div>
       </div>
     </AppLayout>
   )

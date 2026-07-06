@@ -687,10 +687,16 @@ export default function GeogridConfigPage() {
             ) : (
               <div className="flex justify-between items-center pt-1">
                 <button onClick={() => setStep(4)} className="text-sm text-text-secondary hover:text-accent transition-colors">← Retour</button>
-                <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length}>
-                  {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
-                  Lancer un premier rapport maintenant
-                </Button>
+                <div className="flex flex-col items-end gap-1.5">
+                  {hasCompletedRun && (
+                    <p className="text-xs text-text-tertiary">Un rapport a déjà été effectué sur cette fiche — les suivants sont automatiques selon la planification.</p>
+                  )}
+                  <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length || hasCompletedRun}
+                    className="disabled:opacity-40 disabled:cursor-not-allowed">
+                    {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
+                    Lancer un premier rapport maintenant
+                  </Button>
+                </div>
               </div>
             )}
           </div>

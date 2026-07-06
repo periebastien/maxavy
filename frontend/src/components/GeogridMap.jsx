@@ -6,10 +6,10 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 }
 
-function infoContent(pt) {
-  const head = pt.rank == null
-    ? '<strong>Fiche non classée ici</strong>'
-    : `<strong>Votre rang ici : #${pt.rank}</strong>`
+function infoContent(pt, subjectLabel) {
+  const head = subjectLabel
+    ? (pt.rank == null ? `<strong>${esc(subjectLabel)} — non classé ici</strong>` : `<strong>${esc(subjectLabel)} ici : #${pt.rank}</strong>`)
+    : (pt.rank == null ? '<strong>Fiche non classée ici</strong>' : `<strong>Votre rang ici : #${pt.rank}</strong>`)
   const comps = (pt.competitors || []).slice(0, 5).map(c => {
     const note = c.rating != null ? ` · ${c.rating}★` : ''
     return `<li style="margin:2px 0">#${c.rank ?? '—'} — ${esc(c.name || '—')}<span style="color:#9B9BA8">${note}</span></li>`
@@ -23,7 +23,7 @@ function infoContent(pt) {
 // Carte Google Maps rendant une heatmap de positionnement : un marqueur circulaire coloré (couleur = bucket
 // de rang) par point de grille, avec le rang au centre ; clic → InfoWindow des concurrents à ce point.
 // Marqueurs legacy `Marker` (pas d'AdvancedMarkerElement, qui exigerait un mapId Cloud).
-export default function GeogridMap({ center, points, heightClass = 'h-[460px]' }) {
+export default function GeogridMap({ center, points, heightClass = 'h-[460px]', subjectLabel }) {
   const divRef = useRef(null)
   const mapRef = useRef(null)
   const markerCtorRef = useRef(null)
@@ -88,14 +88,14 @@ export default function GeogridMap({ center, points, heightClass = 'h-[460px]' }
         },
       })
       marker.addListener('click', () => {
-        infoRef.current.setContent(infoContent(pt))
+        infoRef.current.setContent(infoContent(pt, subjectLabel))
         infoRef.current.open(mapRef.current, marker)
       })
       markersRef.current.push(marker)
     })
 
     mapRef.current.fitBounds(bounds, 48)
-  }, [points, status])
+  }, [points, status, subjectLabel])
 
   return (
     <div className={`relative w-full ${heightClass} rounded-2xl overflow-hidden border border-border bg-bg-page`}>
