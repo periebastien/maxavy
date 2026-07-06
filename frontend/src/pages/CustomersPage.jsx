@@ -74,7 +74,8 @@ export default function CustomersPage() {
     if (!activeBusiness) return
     setIsLoading(true)
     try {
-      const data = await api.get(`/api/v1/customers?business_id=${activeBusiness.id}`)
+      const locParam = activeLocation ? `&location_id=${activeLocation.id}` : ''
+      const data = await api.get(`/api/v1/customers?business_id=${activeBusiness.id}${locParam}`)
       setCustomers(data)
     } catch {
       setCustomers([])
@@ -83,7 +84,7 @@ export default function CustomersPage() {
     }
   }
 
-  useEffect(() => { load() }, [activeBusiness?.id])
+  useEffect(() => { load() }, [activeBusiness?.id, activeLocation?.id])
 
   function openPanel(name) {
     setPanel(name)
@@ -98,6 +99,7 @@ export default function CustomersPage() {
     try {
       await api.post('/api/v1/customers', {
         business_id:   activeBusiness.id,
+        location_id:   activeLocation?.id || undefined,
         firstname:     form.firstname.trim() || undefined,
         lastname:      form.lastname.trim()  || undefined,
         email:         form.email.trim(),
@@ -121,6 +123,7 @@ export default function CustomersPage() {
       const fd = new FormData()
       fd.append('file', csvFile)
       fd.append('business_id', activeBusiness.id)
+      if (activeLocation?.id) fd.append('location_id', activeLocation.id)
       fd.append('consent_confirmed', 'true')
       const result = await api.upload('/api/v1/customers/import', fd)
       setImportResult(result)

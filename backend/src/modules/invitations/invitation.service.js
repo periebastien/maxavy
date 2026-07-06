@@ -42,13 +42,14 @@ async function send({ customerId, channel, locationId, businessId, userId }) {
       collectUrl,
     })
   } catch (err) {
-    await Invitation.create({ customer_id: customerId, business_id: businessId, channel, status: 'failed', sent_at: new Date() })
+    await Invitation.create({ customer_id: customerId, business_id: businessId, location_id: locationId, channel, status: 'failed', sent_at: new Date() })
     throw { status: 500, message: `Échec d'envoi : ${err.message}` }
   }
 
   const invitation = await Invitation.create({
     customer_id: customerId,
     business_id: businessId,
+    location_id: locationId,
     channel,
     status: 'sent',
     sent_at: new Date(),

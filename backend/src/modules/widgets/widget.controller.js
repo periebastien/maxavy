@@ -15,7 +15,7 @@ async function create(req, res) {
 
 async function list(req, res) {
   try {
-    const widgets = await service.list(req.query.business_id, req.user.id)
+    const widgets = await service.list(req.query.business_id, req.user.id, req.query.location_id)
     res.json(widgets)
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })

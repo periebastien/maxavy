@@ -2,6 +2,7 @@ const { parse } = require('csv-parse/sync')
 const multer = require('multer')
 const Customer = require('../../models/Customer')
 const Business = require('../../models/Business')
+const Location = require('../../models/Location')
 const { assertAccess } = require('../businesses/business.service')
 const { encrypt, decrypt } = require('../../config/encryption')
 
@@ -19,10 +20,16 @@ const upload = multer({
   },
 })
 
-async function importCsv(businessId, fileBuffer, userId) {
+async function importCsv(businessId, fileBuffer, userId, locationId) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
   await assertAccess(business, userId)
+
+  locationId = locationId || null
+  if (locationId) {
+    const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
+    if (!location) throw { status: 404, message: 'Localisation introuvable' }
+  }
 
   let rows
   try {
@@ -72,6 +79,7 @@ async function importCsv(businessId, fileBuffer, userId) {
 
     imported.push({
       business_id:      businessId,
+      location_id:      locationId,
       firstname:        firstname.trim() || null,
       lastname:         lastname.trim()  || null,
       email:            encrypt(email),

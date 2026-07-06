@@ -5,6 +5,7 @@ const Business = require('../../models/Business')
 const Review = require('../../models/Review')
 const ReviewTag = require('../../models/ReviewTag')
 const Location = require('../../models/Location')
+const Tag = require('../../models/Tag')
 const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
 const { mergeDefaults } = require('./widget.defaults')
@@ -56,12 +57,20 @@ async function buildPayload({ businessId, locationId, tagId, type, rawConfig }) 
     : (SORT_MAP[config.carousel.sort] || SORT_MAP.recent)
   const limit = Math.min(config.carousel.limit || 50, 50)
 
-  const reviews = await Review.findAll({
+  const rows = await Review.findAll({
     where,
     order,
     limit,
     attributes: ['id', 'author_name', 'rating', 'text', 'published_at'],
   })
+  // Whitelist explicite (jamais l'instance modèle brute) : seuls ces 5 champs sortent vers les sites tiers.
+  const reviews = rows.map(r => ({
+    id: r.id,
+    author_name: r.author_name,
+    rating: r.rating,
+    text: r.text,
+    published_at: r.published_at,
+  }))
 
   let googleUrl = config.common.googleUrl || null
   if (!googleUrl && locationId) {
@@ -76,11 +85,21 @@ async function buildPayload({ businessId, locationId, tagId, type, rawConfig }) 
     type,
     style: config.style,
     config,
-    location_id: locationId || null,
-    tag_id: tagId || null,
     googleUrl,
     aggregate: { count, average },
     reviews,
+  }
+}
+
+// Vérifie que la localisation / le tag appartiennent bien au business (anti cross-tenant).
+async function assertOwnership(businessId, { locationId, tagId }) {
+  if (locationId) {
+    const loc = await Location.findOne({ where: { id: locationId, business_id: businessId } })
+    if (!loc) throw { status: 404, message: 'Localisation introuvable' }
+  }
+  if (tagId) {
+    const tag = await Tag.findOne({ where: { id: tagId, business_id: businessId } })
+    if (!tag) throw { status: 404, message: 'Tag introuvable' }
   }
 }
 
@@ -88,6 +107,7 @@ async function create(businessId, userId, { name, type = 'carousel', locationId,
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
   await assertAccess(business, userId)
+  await assertOwnership(businessId, { locationId, tagId })
 
   const t = type === 'badge' ? 'badge' : 'carousel'
   const widget = await Widget.create({
@@ -105,12 +125,16 @@ async function create(businessId, userId, { name, type = 'carousel', locationId,
   return widget
 }
 
-async function list(businessId, userId) {
+async function list(businessId, userId, locationId) {
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
   await assertAccess(business, userId)
 
-  return Widget.findAll({ where: { business_id: businessId }, order: [['created_at', 'DESC']] })
+  const where = { business_id: businessId }
+  if (locationId) {
+    where[Op.or] = [{ location_id: locationId }, { location_id: null }]
+  }
+  return Widget.findAll({ where, order: [['created_at', 'DESC']] })
 }
 
 async function getOne(id, businessId, userId) {
@@ -126,6 +150,7 @@ async function getOne(id, businessId, userId) {
 
 async function update(id, businessId, userId, fields) {
   const widget = await getOne(id, businessId, userId)
+  await assertOwnership(businessId, { locationId: fields.location_id, tagId: fields.tag_id })
 
   if (fields.name !== undefined) widget.name = String(fields.name).trim() || widget.name
   if (fields.location_id !== undefined) widget.location_id = fields.location_id || null
@@ -163,7 +188,7 @@ async function getPublic(id) {
     type: widget.type,
     rawConfig: widget.config,
   })
-  return { id: widget.id, updated_at: widget.updated_at, ...payload }
+  return { id: widget.id, ...payload }
 }
 
 // Aperçu builder : rend une config NON persistée. Isolation assurée par le filtre business_id
@@ -172,6 +197,7 @@ async function preview(businessId, userId, { type, config, locationId, tagId }) 
   const business = await Business.findByPk(businessId)
   if (!business) throw { status: 404, message: 'Entreprise introuvable' }
   await assertAccess(business, userId)
+  await assertOwnership(businessId, { locationId, tagId })
 
   const t = type === 'badge' ? 'badge' : 'carousel'
   const payload = await buildPayload({

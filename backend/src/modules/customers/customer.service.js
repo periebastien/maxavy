@@ -1,5 +1,7 @@
+const { Op } = require('sequelize')
 const Customer = require('../../models/Customer')
 const Business = require('../../models/Business')
+const Location = require('../../models/Location')
 const Invitation = require('../../models/Invitation')
 const { assertAccess } = require('../businesses/business.service')
 const { encrypt, decrypt } = require('../../config/encryption')
@@ -22,8 +24,15 @@ async function create(data, businessId, userId) {
   if (!businessId) throw { status: 400, message: 'business_id requis' }
   await assertBusinessAccess(businessId, userId)
 
+  let locationId = data.location_id || null
+  if (locationId) {
+    const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
+    if (!location) throw { status: 404, message: 'Localisation introuvable' }
+  }
+
   const customer = await Customer.create({
     business_id:      businessId,
+    location_id:      locationId,
     firstname:        data.firstname || null,
     lastname:         data.lastname  || null,
     email:            encrypt(data.email),
@@ -35,11 +44,16 @@ async function create(data, businessId, userId) {
   return decryptCustomer(customer)
 }
 
-async function list(businessId, userId) {
+function locationFilter(locationId) {
+  if (!locationId) return {}
+  return { [Op.or]: [{ location_id: locationId }, { location_id: null }] }
+}
+
+async function list(businessId, userId, locationId) {
   if (!businessId) throw { status: 400, message: 'business_id requis' }
   await assertBusinessAccess(businessId, userId)
   const [customers, invitations] = await Promise.all([
-    Customer.findAll({ where: { business_id: businessId }, order: [['created_at', 'DESC']] }),
+    Customer.findAll({ where: { business_id: businessId, ...locationFilter(locationId) }, order: [['created_at', 'DESC']] }),
     Invitation.findAll({ where: { business_id: businessId, status: 'sent' }, order: [['sent_at', 'ASC']] }),
   ])
 
@@ -89,13 +103,14 @@ async function remove(id, userId) {
   await customer.destroy()
 }
 
-async function stats(businessId, userId) {
+async function stats(businessId, userId, locationId) {
   await assertBusinessAccess(businessId, userId)
+  const base = { business_id: businessId, ...locationFilter(locationId) }
   const [total, uninvited, invited, reviewed] = await Promise.all([
-    Customer.count({ where: { business_id: businessId } }),
-    Customer.count({ where: { business_id: businessId, status: 'pending' } }),
-    Customer.count({ where: { business_id: businessId, status: 'invited' } }),
-    Customer.count({ where: { business_id: businessId, status: 'reviewed' } }),
+    Customer.count({ where: base }),
+    Customer.count({ where: { ...base, status: 'pending' } }),
+    Customer.count({ where: { ...base, status: 'invited' } }),
+    Customer.count({ where: { ...base, status: 'reviewed' } }),
   ])
   return { total, uninvited, invited, reviewed }
 }

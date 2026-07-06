@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { LayoutTemplate, Plus, Trash2, Pencil, Loader2 } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import { useBusiness } from '../contexts/BusinessContext'
+import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
 import { WIDGET_TYPES } from '../lib/widget-schema'
 
@@ -14,23 +15,26 @@ function styleLabel(type, styleKey) {
 
 export default function WidgetsPage() {
   const { activeBusiness } = useBusiness()
+  const { activeLocation } = useLocations() || {}
   const navigate = useNavigate()
   const [widgets, setWidgets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const bid = activeBusiness?.id
+  const lid = activeLocation?.id
 
   const load = useCallback(async () => {
     if (!bid) return
     setLoading(true)
     try {
-      setWidgets(await api.get(`/api/v1/widgets?business_id=${bid}`))
+      const params = lid ? `business_id=${bid}&location_id=${lid}` : `business_id=${bid}`
+      setWidgets(await api.get(`/api/v1/widgets?${params}`))
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [bid])
+  }, [bid, lid])
 
   useEffect(() => { load() }, [load])
 
@@ -69,7 +73,12 @@ export default function WidgetsPage() {
             {widgets.map(w => (
               <div key={w.id} className="flex items-center justify-between gap-3 bg-white border border-border rounded-xl px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">{w.name}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-medium text-text-primary truncate">{w.name}</p>
+                    {!w.location_id && (
+                      <span className="text-[11px] text-text-tertiary bg-gray-50 border border-border rounded-full px-2 py-0.5 shrink-0">Toutes les localisations</span>
+                    )}
+                  </div>
                   <p className="text-xs text-text-tertiary">{styleLabel(w.type, w.config && w.config.style)}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

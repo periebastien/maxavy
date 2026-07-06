@@ -25,6 +25,7 @@ const sections = [
     title: 'AVIS',
     items: [
       { label: 'Surveillance', to: '/reviews', icon: Eye },
+      { label: 'Concurrents', to: '/reviews/concurrents', icon: Swords },
       { label: 'Répondre', to: '/reviews/reply', icon: MessageSquare, soon: true },
     ]
   },
@@ -64,6 +65,12 @@ const sections = [
     items: [
       { label: 'Crédits', to: '/credits', icon: Zap },
       { label: 'Plans & Tarifs', to: '/pricing', icon: CreditCard },
+    ]
+  },
+  {
+    title: 'ENTREPRISE',
+    items: [
+      { label: 'Paramètres', to: '/settings', icon: Settings2 },
     ]
   },
 ]

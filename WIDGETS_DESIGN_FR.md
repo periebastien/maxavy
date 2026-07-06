@@ -133,7 +133,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `showRatingValue` | Note chiffrée | bool | `true` | | both |
 | `showReviewCount` | Nombre d'avis | bool | `true` | | both |
 | `qualityLabel` | Libellé qualitatif | text | `auto` | `auto` · `""` · texte libre | framed (`auto` : ≥4,5 Excellent, ≥4 Très bien…) |
-| `ctaText` | Texte du lien | text | `""` | | défaut « Voir nos avis » |
+| `ctaText` | Texte du lien | text | `""` | `""` = aucun CTA | affiché sous le badge (`.lcg-cta`), cliquable, seulement si `googleUrl` résolu |
 
 ### 3.3 `carousel`
 
@@ -215,16 +215,18 @@ Préfixe `lcg-` partout. Les couleurs passent par les variables CSS ci-dessus.
 
 ```html
 <article class="lcg-rc">
-  <header class="lcg-rc__head">
-    <span class="lcg-rc__avatar" style="background:#C0673C">O</span>
-    <div class="lcg-rc__id">
-      <p class="lcg-rc__name">Oumaima B.</p>
-      <p class="lcg-rc__date">il y a 2 semaines</p>
+  <div class="lcg-rc-head">
+    <span class="lcg-av" style="background:#C0673C">O</span>
+    <div class="lcg-rc-id">
+      <p class="lcg-rc-name">Oumaima B.</p>
+      <p class="lcg-rc-date">il y a 2 semaines</p>
     </div>
     <!-- logo Google « G » SVG inline si showGoogleLogo -->
-  </header>
-  <div class="lcg-rc__stars" aria-label="5 sur 5"><!-- N étoiles SVG --></div>
-  <p class="lcg-rc__text">Accueil parfait et équipe très professionnelle…</p>
+  </div>
+  <div class="lcg-rc-stars" aria-label="5 sur 5"><!-- N étoiles SVG --></div>
+  <p class="lcg-rc-text">Accueil parfait et équipe très professionnelle…</p>
+  <!-- si texte tronqué (maxChars) et showReadMore : bouton bascule -->
+  <button type="button" class="lcg-rc-more">Lire plus</button>
 </article>
 ```
 
@@ -266,5 +268,6 @@ Le conteneur change selon `style` : `slider` (rangée + flèches `--lcg-accent` 
 - `getPublic` : filtre `minRating` symétrique (count + AVG + liste) ; `sort` ; `limit` borné `min(config,50)` ; expose l'`id` de l'avis (clés stables) — jamais `external_id`/`reply_text`/email ; `googleUrl` dérivé de `Location.google_place_id` (null si pas de location) ; force `showPoweredBy=true` en plan gratuit sans exposer le plan.
 - `update()` : bornage des nombres + rejet des clés hors-schéma dans le JSONB.
 - `widget.controller` : `Cache-Control` sur `/public` (120 s) et `/embed.js` (300 s) + ETag sur `updated_at`.
-- Réponse `/public` finale : `{ id, type, config, locationId, tagId, googleUrl, aggregate:{count,average}, reviews:[{id, author_name, rating, text, published_at}] }`.
+- Réponse `/public` finale : `{ id, type, style, config, googleUrl, aggregate:{count,average}, reviews:[{id, author_name, rating, text, published_at}] }` — whitelist explicite par mapping ; `location_id`/`tag_id`/`updated_at` retirés (session 28, IDs internes non nécessaires à l'affichage).
+- Session 28 : « Lire plus » (`.lcg-rc-more`, bascule FR/EN, texte complet échappé en data-attr) ; `requireText` effectif au rendu ; badge `framed` sensible à `size`/`shape` ; `starStyle=rounded` ; `ctaText` rendu (`.lcg-cta`, vide = aucun, nécessite `googleUrl`) ; `showReadMore` + `ctaText` pilotables dans le builder.
 - **Aucune migration** (colonnes `type`/`config`/`embed_code`/`location_id`/`tag_id` déjà en place).

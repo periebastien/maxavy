@@ -29,7 +29,7 @@ const emptyForm = { name: '', channel: 'email', locationId: '', ratePer: '10', r
 
 export default function InvitationsPage() {
   const { activeBusiness } = useBusiness()
-  const { locations = [] } = useLocations() || {}
+  const { locations = [], activeLocation } = useLocations() || {}
 
   const [campaigns, setCampaigns]     = useState([])
   const [stats, setStats]             = useState(null)
@@ -51,9 +51,11 @@ export default function InvitationsPage() {
     if (!activeBusiness) return
     setIsLoading(true)
     try {
+      const locParam = activeLocation ? `&locationId=${activeLocation.id}` : ''
+      const statsLocParam = activeLocation ? `&location_id=${activeLocation.id}` : ''
       const [c, s] = await Promise.all([
-        api.get(`/api/v1/campaigns?businessId=${activeBusiness.id}`),
-        api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}`),
+        api.get(`/api/v1/campaigns?businessId=${activeBusiness.id}${locParam}`),
+        api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}${statsLocParam}`),
       ])
       setCampaigns(c)
       setStats(s)
@@ -64,12 +66,12 @@ export default function InvitationsPage() {
     }
   }
 
-  useEffect(() => { loadCampaigns() }, [activeBusiness?.id])
+  useEffect(() => { loadCampaigns() }, [activeBusiness?.id, activeLocation?.id])
 
   useEffect(() => {
     if (!showForm) return
-    setForm(f => ({ ...f, locationId: f.locationId || locations[0]?.id || '' }))
-  }, [showForm, locations.length])
+    setForm(f => ({ ...f, locationId: f.locationId || activeLocation?.id || locations[0]?.id || '' }))
+  }, [showForm, locations.length, activeLocation?.id])
 
   // Recherche debouncée (mode manuel uniquement)
   useEffect(() => {

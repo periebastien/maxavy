@@ -26,11 +26,13 @@ async function create({ businessId, userId, name, channel, locationId, customerI
   const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
   if (!location) throw { status: 404, message: 'Localisation introuvable' }
 
+  const locationScope = { [Op.or]: [{ location_id: locationId }, { location_id: null }] }
+
   let customers
   if (filter === 'all') {
-    customers = await Customer.findAll({ where: { business_id: businessId }, attributes: ['id'] })
+    customers = await Customer.findAll({ where: { business_id: businessId, ...locationScope }, attributes: ['id'] })
   } else if (filter === 'uninvited') {
-    customers = await Customer.findAll({ where: { business_id: businessId, status: 'pending' }, attributes: ['id'] })
+    customers = await Customer.findAll({ where: { business_id: businessId, status: 'pending', ...locationScope }, attributes: ['id'] })
   } else if (customerIds?.length) {
     customers = await Customer.findAll({ where: { id: { [Op.in]: customerIds }, business_id: businessId }, attributes: ['id'] })
   } else {
@@ -73,10 +75,12 @@ async function create({ businessId, userId, name, channel, locationId, customerI
   return campaign
 }
 
-async function list(businessId, userId) {
+async function list(businessId, userId, locationId) {
   await assertBusiness(businessId, userId)
+  const where = { business_id: businessId }
+  if (locationId) where.location_id = locationId
   return InvitationCampaign.findAll({
-    where: { business_id: businessId },
+    where,
     order: [['created_at', 'DESC']],
   })
 }

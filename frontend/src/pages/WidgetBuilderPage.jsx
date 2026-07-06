@@ -143,7 +143,7 @@ export default function WidgetBuilderPage() {
   const editing = !!id
   const navigate = useNavigate()
   const { activeBusiness } = useBusiness()
-  const { locations = [] } = useLocations() || {}
+  const { locations = [], activeLocation } = useLocations() || {}
 
   const [name, setName] = useState('Mon widget')
   const [type, setType] = useState('carousel')
@@ -158,6 +158,13 @@ export default function WidgetBuilderPage() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState(null)
   const [openSections, setOpenSections] = useState(() => new Set(['source']))
+  const locationPrefilled = useRef(false)
+
+  useEffect(() => {
+    if (editing || locationPrefilled.current || !activeLocation) return
+    locationPrefilled.current = true
+    setLocationId(activeLocation.id)
+  }, [editing, activeLocation])
 
   function toggleSection(sid) {
     setOpenSections(prev => {

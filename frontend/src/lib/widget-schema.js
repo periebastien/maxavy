@@ -85,6 +85,7 @@ export const FIELDS = [
   { scope: 'badge', key: 'showReviewCount', label: 'Nombre d\'avis', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'starStyle', label: 'Style étoiles', type: 'enum', section: 'contenu', styles: ['framed'], options: [['fractional', 'Fractionnaire'], ['rounded', 'Arrondi']] },
   { scope: 'badge', key: 'qualityLabel', label: 'Libellé (auto / texte)', type: 'text', section: 'contenu', styles: ['framed'] },
+  { scope: 'badge', key: 'ctaText', label: 'Texte du lien (vide = aucun)', type: 'text', section: 'contenu' },
 
   // ---- CARROUSEL · apparence
   { scope: 'carousel', key: 'cardsDesktop', label: 'Cartes (desktop)', type: 'number', section: 'apparence', min: 1, max: 6, step: 1, styles: ['slider', 'grid'] },
@@ -100,6 +101,7 @@ export const FIELDS = [
   { scope: 'carousel', key: 'dateFormat', label: 'Format date', type: 'enum', section: 'contenu', options: [['relative', 'Relative'], ['absolute', 'Absolue']] },
   { scope: 'carousel', key: 'showStars', label: 'Étoiles', type: 'bool', section: 'contenu' },
   { scope: 'carousel', key: 'maxChars', label: 'Longueur max (0 = tout)', type: 'number', section: 'contenu', min: 0, max: 1000, step: 10 },
+  { scope: 'carousel', key: 'showReadMore', label: 'Bouton « Lire plus »', type: 'bool', section: 'contenu' },
   { scope: 'carousel', key: 'requireText', label: 'Masquer avis sans texte', type: 'bool', section: 'contenu' },
   { scope: 'carousel', key: 'sort', label: 'Tri', type: 'enum', section: 'contenu', options: [['recent', 'Récents'], ['highest', 'Mieux notés'], ['lowest', 'Moins notés'], ['random', 'Aléatoire']] },
   { scope: 'carousel', key: 'limit', label: 'Nombre d\'avis', type: 'number', section: 'contenu', min: 1, max: 50, step: 1 },

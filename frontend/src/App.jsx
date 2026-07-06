@@ -19,11 +19,15 @@ import CreditsPage from './pages/CreditsPage'
 import PricingPage from './pages/PricingPage'
 import WidgetsPage from './pages/WidgetsPage'
 import WidgetBuilderPage from './pages/WidgetBuilderPage'
+import AdminPlansPage from './pages/AdminPlansPage'
+import AdminAccountsPage from './pages/AdminAccountsPage'
+import AdminModulesPage from './pages/AdminModulesPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
 const GeogridSuiviPage       = lazy(() => import('./pages/GeogridSuiviPage'))
 const GeogridConcurrentsPage = lazy(() => import('./pages/GeogridConcurrentsPage'))
+const ReviewsConcurrentsPage = lazy(() => import('./pages/ReviewsConcurrentsPage'))
 
 function RequireBusiness({ children }) {
   const { isLoading: authLoading } = useAuth()
@@ -60,6 +64,7 @@ export default function App() {
       <Route path="/customers"               element={<PrivateRoute><RequireBusiness><CustomersPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/invitations"             element={<PrivateRoute><RequireBusiness><InvitationsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/reviews"                 element={<PrivateRoute><RequireBusiness><ReviewsPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/reviews/concurrents"     element={<PrivateRoute><RequireBusiness><Suspense fallback={null}><ReviewsConcurrentsPage /></Suspense></RequireBusiness></PrivateRoute>} />
       <Route path="/widgets"                 element={<PrivateRoute><RequireBusiness><WidgetsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/widgets/new"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/widgets/:id"             element={<PrivateRoute><RequireBusiness><WidgetBuilderPage /></RequireBusiness></PrivateRoute>} />
@@ -69,6 +74,9 @@ export default function App() {
       <Route path="/positionnement"                element={<Navigate to="/positionnement/configuration" replace />} />
       <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/admin/plans"             element={<PrivateRoute><AdminPlansPage /></PrivateRoute>} />
+      <Route path="/admin/accounts"          element={<PrivateRoute><AdminAccountsPage /></PrivateRoute>} />
+      <Route path="/admin/modules"           element={<PrivateRoute><AdminModulesPage /></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>

@@ -12,7 +12,7 @@ async function create(req, res) {
 
 async function list(req, res) {
   try {
-    const customers = await service.list(req.query.business_id, req.user.id)
+    const customers = await service.list(req.query.business_id, req.user.id, req.query.location_id)
     res.json(customers)
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })
@@ -54,7 +54,7 @@ async function importFromCsv(req, res) {
     if (!req.file) {
       return res.status(400).json({ message: 'Fichier CSV manquant' })
     }
-    const result = await importCsv(req.body.business_id, req.file.buffer, req.user.id)
+    const result = await importCsv(req.body.business_id, req.file.buffer, req.user.id, req.body.location_id)
     res.json(result)
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })
@@ -63,7 +63,7 @@ async function importFromCsv(req, res) {
 
 async function stats(req, res) {
   try {
-    const result = await service.stats(req.query.business_id, req.user.id)
+    const result = await service.stats(req.query.business_id, req.user.id, req.query.location_id)
     res.json(result)
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })

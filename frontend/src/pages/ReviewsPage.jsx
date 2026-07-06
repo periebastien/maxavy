@@ -4,6 +4,7 @@ import AppLayout from '../components/layout/AppLayout'
 import Badge from '../components/common/Badge'
 import Select from '../components/common/Select'
 import Button from '../components/common/Button'
+import EntityAvatar from '../components/common/EntityAvatar'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
@@ -23,19 +24,19 @@ function StarRating({ value }) {
 }
 
 function ReviewCard({ review }) {
-  const [expanded, setExpanded] = useState(false)
-  const hasLongText = review.text && review.text.length > 200
-
   return (
     <div className="bg-white rounded-xl border border-border p-4 space-y-2">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">{review.author_name || 'Anonyme'}</p>
-          <p className="text-xs text-text-tertiary">
-            {review.published_at
-              ? new Date(review.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-              : '—'}
-          </p>
+        <div className="flex items-start gap-2.5 min-w-0">
+          <EntityAvatar name={review.author_name} src={review.author_image_url} size={36} shape="circle" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text-primary">{review.author_name || 'Anonyme'}</p>
+            <p className="text-xs text-text-tertiary">
+              {review.published_at
+                ? new Date(review.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                : '—'}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {review.rating && <StarRating value={review.rating} />}
@@ -49,25 +50,13 @@ function ReviewCard({ review }) {
       </div>
 
       {review.text && (
-        <div>
-          <p className="text-sm text-text-secondary leading-relaxed">
-            {hasLongText && !expanded ? review.text.slice(0, 200) + '…' : review.text}
-          </p>
-          {hasLongText && (
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="text-xs text-accent mt-1 hover:underline"
-            >
-              {expanded ? 'Voir moins' : 'Voir plus'}
-            </button>
-          )}
-        </div>
+        <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-line">{review.text}</p>
       )}
 
       {review.reply_text && (
         <div className="bg-bg-page border border-border rounded-lg px-3 py-2">
           <p className="text-xs font-medium text-text-secondary mb-1">Votre réponse</p>
-          <p className="text-xs text-text-secondary leading-relaxed">{review.reply_text}</p>
+          <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">{review.reply_text}</p>
         </div>
       )}
     </div>
@@ -87,52 +76,59 @@ const LIMIT = 20
 
 export default function ReviewsPage() {
   const { activeBusiness } = useBusiness()
-  const { locations = [] } = useLocations() || {}
+  const { activeLocation } = useLocations() || {}
+  const locId = activeLocation?.id
 
   const [reviews, setReviews]       = useState([])
   const [total, setTotal]           = useState(0)
   const [page, setPage]             = useState(1)
-  const [locationId, setLocationId] = useState('')
   const [starFilter, setStarFilter] = useState('')
   const [isLoading, setIsLoading]   = useState(true)
   const [isSyncing, setIsSyncing]   = useState(false)
   const [error, setError]           = useState(null)
 
-  const locationOptions = [
-    { value: '', label: 'Toutes les localisations' },
-    ...locations.map(l => ({ value: l.id, label: l.name })),
-  ]
-
   const load = useCallback(async () => {
-    if (!activeBusiness) return
+    if (!activeBusiness || !locId) {
+      setReviews([])
+      setTotal(0)
+      setIsLoading(false)
+      return
+    }
     setIsLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ page, limit: LIMIT })
-      if (locationId) qs.set('location_id', locationId)
+      const qs = new URLSearchParams({ page, limit: LIMIT, location_id: locId })
       const data = await api.get(`/api/v1/reviews?business_id=${activeBusiness.id}&${qs}`)
       let rows = data.reviews
       if (starFilter) rows = rows.filter(r => r.rating === parseInt(starFilter))
       setReviews(rows)
       setTotal(data.total)
     } catch (err) {
-      setError(err.response?.data?.message || 'Erreur de chargement')
+      setError(err.message || 'Erreur de chargement')
     } finally {
       setIsLoading(false)
     }
-  }, [activeBusiness, page, locationId, starFilter])
+  }, [activeBusiness, locId, page, starFilter])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [locationId, starFilter])
+  useEffect(() => { setPage(1) }, [locId, starFilter])
 
   async function handleSync() {
+    if (!activeBusiness) return
     setIsSyncing(true)
     setError(null)
     try {
-      await api.post('/reviews/sync')
+      await api.post(`/api/v1/reviews/sync?business_id=${activeBusiness.id}`)
+      // Tâches DataForSEO asynchrones : on poll l'état (jusqu'à ~90 s) puis on recharge.
+      const deadline = Date.now() + 90000
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000))
+        const s = await api.get(`/api/v1/reviews/sync/status?business_id=${activeBusiness.id}`)
+        if (!s.running) break
+      }
       await load()
     } catch (err) {
-      setError(err.response?.data?.message || 'Erreur de synchronisation')
+      setError(err.message || 'Erreur de synchronisation')
     } finally {
       setIsSyncing(false)
     }
@@ -160,13 +156,6 @@ export default function ReviewsPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="w-full sm:w-56">
-            <Select
-              value={locationId}
-              onChange={e => setLocationId(e.target.value)}
-              options={locationOptions}
-            />
-          </div>
           <div className="w-full sm:w-44">
             <Select
               value={starFilter}

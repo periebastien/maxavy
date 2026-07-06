@@ -49,11 +49,11 @@ export default function DashboardPage() {
   const { activeBusiness } = useBusiness()
   const navigate = useNavigate()
 
-  const { locations = [], hasLocations } = useLocations() || {}
+  const { locations = [], hasLocations, activeLocation } = useLocations() || {}
   const hasWebsite = !!activeBusiness?.website_url
   const credits    = activeBusiness?.credit_balance ?? 0
 
-  const [hasInvited, setHasInvited]           = useState(false)
+  const [customerStats, setCustomerStats]     = useState(null)
   const [qrVisited, setQrVisited]             = useState(false)
   const [googleConnected, setGoogleConnected] = useState(false)
   const [googleLoading, setGoogleLoading]     = useState(false)
@@ -61,14 +61,17 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!activeBusiness) return
     setQrVisited(!!localStorage.getItem(`qr_visited_${activeBusiness.id}`))
+    const locParam = activeLocation ? `&location_id=${activeLocation.id}` : ''
     Promise.all([
-      api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}`),
+      api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}${locParam}`),
       api.get(`/api/v1/google/status?businessId=${activeBusiness.id}`),
     ]).then(([s, g]) => {
-      setHasInvited((s.invited + s.reviewed) > 0)
+      setCustomerStats(s)
       setGoogleConnected(!!g?.connected)
     }).catch(() => {})
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, activeLocation?.id])
+
+  const hasInvited = customerStats ? (customerStats.invited + customerStats.reviewed) > 0 : false
 
   async function connectGoogle() {
     setGoogleLoading(true)
@@ -122,20 +125,20 @@ export default function DashboardPage() {
           />
           <MetricCard
             label="Avis collectés"
-            value="0"
-            sub="Bientôt disponible"
+            value={activeLocation?.total_reviews_count ?? '—'}
+            sub={activeLocation?.name}
             icon={<Star size={16} className="text-yellow-400" />}
           />
           <MetricCard
             label="Note moyenne"
-            value="—"
-            sub="Bientôt disponible"
+            value={activeLocation?.avg_rating != null ? activeLocation.avg_rating.toFixed(1) : '—'}
+            sub={activeLocation?.name}
             icon={<Star size={16} className="text-yellow-400" />}
           />
           <MetricCard
-            label="Invitations envoyées"
-            value="0"
-            sub="Bientôt disponible"
+            label="Clients invités"
+            value={customerStats ? customerStats.invited + customerStats.reviewed : '—'}
+            sub={activeLocation?.name}
             icon={<Mail size={16} className="text-blue-400" />}
           />
         </div>

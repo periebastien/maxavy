@@ -28,9 +28,9 @@ async function create(req, res, next) {
 
 async function list(req, res, next) {
   try {
-    const { businessId } = req.query
+    const { businessId, locationId } = req.query
     if (!businessId) return res.status(400).json({ message: 'businessId requis' })
-    const campaigns = await service.list(businessId, req.user.id)
+    const campaigns = await service.list(businessId, req.user.id, locationId)
     res.json(campaigns)
   } catch (err) {
     next(err)

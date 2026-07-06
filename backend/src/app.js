@@ -34,6 +34,9 @@ app.use('/api/v1/stripe',   require('./modules/stripe/stripe.routes'))
 app.use('/api/v1/widgets',  require('./modules/widgets/widget.routes'))
 app.use('/api/v1/tags',     require('./modules/tags/tag.routes'))
 app.use('/api/v1/rank-tracking', require('./modules/rank-tracking/rank-tracking.routes'))
+app.use('/api/v1/admin/plans', require('./modules/plans-admin/plans-admin.routes'))
+app.use('/api/v1/admin/accounts', require('./modules/admin-accounts/admin-accounts.routes'))
+app.use('/api/v1/admin/business-modules', require('./modules/admin-modules/admin-modules.routes'))
 
 const PORT = process.env.PORT || 3000
 

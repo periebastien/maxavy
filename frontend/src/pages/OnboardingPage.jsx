@@ -83,7 +83,7 @@ export default function OnboardingPage() {
   const [error, setError]             = useState('')
   const [submitting, setSubmitting]   = useState(false)
   const { refresh, setActiveBusiness, hasBusinesses } = useBusiness()
-  const { user }                      = useAuth()
+  const { user, logout }              = useAuth()
   const navigate                      = useNavigate()
   const isAdding                      = hasBusinesses // ajout d'un établissement supplémentaire
 
@@ -134,6 +134,8 @@ export default function OnboardingPage() {
   }
 
   function back() { setError(''); setStep(s => s - 1) }
+
+  function handleLogout() { logout(); navigate('/login') }
 
   async function handleCreate() {
     setSubmitting(true); setError('')
@@ -198,6 +200,12 @@ export default function OnboardingPage() {
               ← Annuler et revenir au tableau de bord
             </button>
           )}
+          <button
+            onClick={handleLogout}
+            className="block mx-auto text-xs text-text-tertiary hover:text-text-secondary transition-colors mt-3"
+          >
+            Se déconnecter
+          </button>
         </div>
 
         <StepIndicator steps={STEPS} current={step} />

@@ -130,10 +130,13 @@ function LOCAGAIN_RUNTIME() {
     var avg = payload.aggregate.average, count = payload.aggregate.count
     var radius = b.shape === 'square' ? '6px' : b.shape === 'rounded' ? '12px' : '999px'
     var pad = b.size === 'large' ? '10px 20px' : b.size === 'small' ? '5px 12px' : '7px 16px'
+    var fpad = b.size === 'large' ? '24px 38px' : b.size === 'small' ? '12px 20px' : '18px 30px'
+    var fradius = b.shape === 'square' ? '6px' : b.shape === 'pill' ? '24px' : '14px'
+    var starAvg = b.starStyle === 'rounded' ? Math.round(avg) : avg
     var inner = ''
     if (b.showAvatars) inner += avatars(payload.reviews, b.avatarsCount, pal.bg)
     if (payload.style === 'framed') {
-      var stars = b.showStars ? starsRow(avg, pal.star, 18) : ''
+      var stars = b.showStars ? starsRow(starAvg, pal.star, 18) : ''
       var label = b.qualityLabel === '' ? '' : '<div class="lcg-bf-label">' + esc(b.qualityLabel === 'auto' ? qualityText(avg, c.lang) : b.qualityLabel) + '</div>'
       var line = (b.showRatingValue ? num1(c.lang, avg) + (c.lang === 'en' ? ' out of 5' : ' sur 5') : '')
         + (b.showReviewCount ? (b.showRatingValue ? ' · ' : '') + count + (c.lang === 'en' ? ' Google reviews' : ' avis Google') : '')
@@ -149,14 +152,16 @@ function LOCAGAIN_RUNTIME() {
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
       + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
-      + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:18px 30px;background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + (b.shape === 'square' ? '6px' : '14px') + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
+      + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:' + fpad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + fradius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
       + '.lcg-bf-label{font-size:17px;font-weight:500;color:' + pal.text + '}'
       + '.lcg-bf-line{font-size:13px;color:' + pal.muted + '}'
       + '.lcg-wrap{display:flex;justify-content:' + justify + ';padding:' + cpad + 'px}'
       + '.lcg-wrap-inner{display:flex;flex-direction:column;align-items:center}'
+      + '.lcg-cta{margin-top:6px;font-size:13px;font-weight:500;color:' + pal.muted + ';text-decoration:underline;text-align:center}'
     var body = payload.style === 'framed'
       ? inner
       : '<span class="lcg-bc">' + inner + '</span>'
+    if (b.ctaText && payload.googleUrl) body += '<div class="lcg-cta">' + esc(b.ctaText) + '</div>'
     if (payload.googleUrl) body = '<a class="lcg-link" href="' + esc(payload.googleUrl) + '" target="_blank" rel="noopener nofollow">' + body + '</a>'
     var content = '<div class="lcg-wrap"><div class="lcg-wrap-inner">' + body + (pbHtml || '') + '</div></div>'
     return { css: css, html: content }
@@ -174,7 +179,13 @@ function LOCAGAIN_RUNTIME() {
     head = '<div class="lcg-rc-head">' + head + '<div class="lcg-rc-id">' + idblock + '</div>' + (c.showGoogleLogo ? googleG(18) : '') + '</div>'
     var stars = cw.showStars ? starsRow(r.rating, pal.star, 15) : ''
     var cl = clamp(r.text, cw.maxChars)
-    var body = cl.t ? '<p class="lcg-rc-text">' + esc(cl.t) + '</p>' : ''
+    var body = ''
+    if (cl.t) {
+      var readMore = cl.cut && cw.showReadMore
+        ? '<button type="button" class="lcg-rc-more" data-full="' + esc(r.text || '') + '" data-less="' + esc(cl.t) + '" data-lang="' + esc(c.lang) + '">' + (c.lang === 'en' ? 'Read more' : 'Lire plus') + '</button>'
+        : ''
+      body = '<p class="lcg-rc-text">' + esc(cl.t) + '</p>' + readMore
+    }
     return '<article class="lcg-rc">' + head + (stars ? '<div class="lcg-rc-stars">' + stars + '</div>' : '') + body + '</article>'
   }
 
@@ -191,7 +202,10 @@ function LOCAGAIN_RUNTIME() {
 
   function carouselHtml(payload, pal) {
     var cfg = payload.config, cw = cfg.carousel
-    var cards = payload.reviews.map(function (r) { return reviewCard(r, cfg, pal) }).join('')
+    var list = cw.requireText
+      ? payload.reviews.filter(function (r) { return r.text && String(r.text).trim() })
+      : payload.reviews
+    var cards = list.map(function (r) { return reviewCard(r, cfg, pal) }).join('')
     var body
     if (payload.style === 'grid') {
       body = '<div class="lcg-grid">' + cards + '</div>'
@@ -211,6 +225,7 @@ function LOCAGAIN_RUNTIME() {
       + '.lcg-rc{background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';padding:14px 16px;box-shadow:' + shadow(cw.cardShadow) + '}'
       + '.lcg-rc-head{display:flex;align-items:center;gap:10px}.lcg-rc-id{flex:1;min-width:0}.lcg-rc-name{margin:0;font-size:14px;font-weight:500;color:' + pal.text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lcg-rc-date{margin:0;font-size:12px;color:' + pal.muted + '}'
       + '.lcg-rc-stars{margin:9px 0 7px}.lcg-rc-text{margin:0;font-size:13px;line-height:1.55;color:' + pal.muted + '}'
+      + '.lcg-rc-more{display:block;margin:4px 0 0;padding:0;border:none;background:none;font:inherit;font-size:13px;font-weight:500;color:' + pal.accent + ';cursor:pointer;text-decoration:underline}'
       + '.lcg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:' + cw.gap + 'px}'
       + '.lcg-list .lcg-rc{border-left:0;border-right:0;border-top:0;border-radius:0;box-shadow:none;padding:15px 0}.lcg-list .lcg-rc:last-child{border-bottom:0}.lcg-list{padding:0 4px}'
       + '.lcg-sl{display:flex;align-items:center;gap:10px}.lcg-vp{flex:1;overflow:hidden}.lcg-track{display:flex;gap:' + cw.gap + 'px;transition:transform .35s ease}'
@@ -266,6 +281,27 @@ function LOCAGAIN_RUNTIME() {
     sizeCards(); buildDots(); go(0); start()
   }
 
+  function bindReadMore(root) {
+    if (root.__lcgRmBound) return
+    root.__lcgRmBound = true
+    root.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.lcg-rc-more') : null
+      if (!btn || !root.contains(btn)) return
+      var textEl = btn.previousElementSibling
+      if (!textEl || !textEl.classList || !textEl.classList.contains('lcg-rc-text')) return
+      var expanded = btn.getAttribute('data-expanded') === '1'
+      if (expanded) {
+        textEl.textContent = btn.getAttribute('data-less')
+        btn.textContent = btn.getAttribute('data-lang') === 'en' ? 'Read more' : 'Lire plus'
+        btn.setAttribute('data-expanded', '0')
+      } else {
+        textEl.textContent = btn.getAttribute('data-full')
+        btn.textContent = btn.getAttribute('data-lang') === 'en' ? 'Read less' : 'Lire moins'
+        btn.setAttribute('data-expanded', '1')
+      }
+    })
+  }
+
   function render(root, payload) {
     if (!root || !payload) return
     if (!payload.aggregate || payload.aggregate.count === 0 || !payload.reviews || !payload.reviews.length) {
@@ -282,6 +318,7 @@ function LOCAGAIN_RUNTIME() {
     var outerPb = payload.type === 'badge' ? '' : pbHtml
     root.innerHTML = '<style>' + baseCss(pal, cfg) + part.css + '</style><div class="lcg-root">' + part.html + outerPb + '</div>'
     if (payload.type === 'carousel' && payload.style === 'slider') initSlider(root, cfg)
+    if (payload.type === 'carousel') bindReadMore(root)
   }
 
   window.__lcgw = { render: render }
