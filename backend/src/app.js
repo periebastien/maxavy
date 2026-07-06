@@ -13,6 +13,11 @@ const app = express()
 
 app.use(helmet())
 app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://locagain.com' : 'http://localhost:5173' }))
+
+// Webhook Stripe : body brut obligatoire pour la vérification de signature HMAC.
+// Doit être monté AVANT express.json() global, sinon le body arrive déjà parsé en objet JS.
+app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }))
+
 app.use(express.json())
 
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }))

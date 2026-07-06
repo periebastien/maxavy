@@ -69,7 +69,7 @@ async function forgotPassword({ email }) {
 async function resetPassword({ token, password }) {
   let payload
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET)
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] })
   } catch {
     throw { status: 400, message: 'Lien invalide ou expiré' }
   }

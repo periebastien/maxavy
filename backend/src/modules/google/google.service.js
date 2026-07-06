@@ -42,7 +42,7 @@ async function getAuthUrl(businessId, userId) {
 async function handleCallback(code, state) {
   let payload
   try {
-    payload = jwt.verify(state, process.env.JWT_SECRET)
+    payload = jwt.verify(state, process.env.JWT_SECRET, { algorithms: ['HS256'] })
   } catch {
     throw { status: 400, message: 'State invalide ou expiré' }
   }

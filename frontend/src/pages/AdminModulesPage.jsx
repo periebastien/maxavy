@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
 import AdminLayout from '../components/layout/AdminLayout'
 
 export default function AdminModulesPage() {
-  const { user, isLoading: authLoading } = useAuth()
   const [businesses, setBusinesses] = useState(null)
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState('')
@@ -43,11 +41,6 @@ export default function AdminModulesPage() {
     } finally {
       setSavingKey(null)
     }
-  }
-
-  if (authLoading) return null
-  if (user?.role !== 'superadmin') {
-    return <div className="p-6 text-red-600">Accès réservé au Super Admin.</div>
   }
 
   const filtered = (businesses || []).filter(b =>

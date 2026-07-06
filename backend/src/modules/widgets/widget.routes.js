@@ -1,11 +1,17 @@
 const router = require('express').Router()
+const cors = require('cors')
+const rateLimit = require('express-rate-limit')
 const ctrl = require('./widget.controller')
 const { authMiddleware } = require('../../middlewares/auth.middleware')
 
-// Routes publiques (sans auth) — embarquées sur les sites clients
-router.get('/runtime.js',   ctrl.getRuntimeJs)
-router.get('/:id/public',   ctrl.getPublic)
-router.get('/:id/embed.js', ctrl.getEmbedJs)
+// Routes publiques (sans auth) — embarquées sur les sites clients.
+// CORS ouvert (le widget est chargé depuis n'importe quel domaine client) + rate limit dédié permissif.
+const publicCors = cors({ origin: '*' })
+const publicLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 300 })
+
+router.get('/runtime.js',   publicCors, publicLimiter, ctrl.getRuntimeJs)
+router.get('/:id/public',   publicCors, publicLimiter, ctrl.getPublic)
+router.get('/:id/embed.js', publicCors, publicLimiter, ctrl.getEmbedJs)
 
 router.use(authMiddleware)
 router.post('/preview', ctrl.preview)

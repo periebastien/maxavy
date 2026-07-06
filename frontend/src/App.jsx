@@ -74,9 +74,9 @@ export default function App() {
       <Route path="/positionnement"                element={<Navigate to="/positionnement/configuration" replace />} />
       <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />
-      <Route path="/admin/plans"             element={<PrivateRoute><AdminPlansPage /></PrivateRoute>} />
-      <Route path="/admin/accounts"          element={<PrivateRoute><AdminAccountsPage /></PrivateRoute>} />
-      <Route path="/admin/modules"           element={<PrivateRoute><AdminModulesPage /></PrivateRoute>} />
+      <Route path="/admin/plans"             element={<PrivateRoute requireRole="superadmin"><AdminPlansPage /></PrivateRoute>} />
+      <Route path="/admin/accounts"          element={<PrivateRoute requireRole="superadmin"><AdminAccountsPage /></PrivateRoute>} />
+      <Route path="/admin/modules"           element={<PrivateRoute requireRole="superadmin"><AdminModulesPage /></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>

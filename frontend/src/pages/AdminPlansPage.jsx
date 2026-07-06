@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
 import AdminLayout from '../components/layout/AdminLayout'
 
 const FREQUENCIES = ['monthly', 'weekly', 'daily']
@@ -296,7 +295,6 @@ function RankTrackingForm({ plan, onSaved }) {
 }
 
 export default function AdminPlansPage() {
-  const { user, isLoading: authLoading } = useAuth()
   const [plans, setPlans] = useState(null)
   const [error, setError] = useState(null)
   const [showNew, setShowNew] = useState(false)
@@ -308,11 +306,6 @@ export default function AdminPlansPage() {
   }
 
   useEffect(() => { load() }, [])
-
-  if (authLoading) return null
-  if (user?.role !== 'superadmin') {
-    return <div className="p-6 text-red-600">Accès réservé au Super Admin.</div>
-  }
 
   return (
     <AdminLayout>

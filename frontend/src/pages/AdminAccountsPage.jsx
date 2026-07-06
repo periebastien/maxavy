@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
-import { useAuth } from '../contexts/AuthContext'
 import AdminLayout from '../components/layout/AdminLayout'
 
 function formatDate(d) {
@@ -114,7 +113,6 @@ function AddCreditsButton({ account, onChanged }) {
 }
 
 export default function AdminAccountsPage() {
-  const { user, isLoading: authLoading } = useAuth()
   const [accounts, setAccounts] = useState(null)
   const [plans, setPlans] = useState(null)
   const [q, setQ] = useState('')
@@ -135,11 +133,6 @@ export default function AdminAccountsPage() {
   function handleSearch(e) {
     e.preventDefault()
     load(q)
-  }
-
-  if (authLoading) return null
-  if (user?.role !== 'superadmin') {
-    return <div className="p-6 text-red-600">Accès réservé au Super Admin.</div>
   }
 
   return (
