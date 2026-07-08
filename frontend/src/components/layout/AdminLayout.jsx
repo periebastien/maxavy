@@ -1,12 +1,22 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 
 const TABS = [
   { to: '/admin/plans', label: 'Plans' },
   { to: '/admin/accounts', label: 'Comptes' },
   { to: '/admin/modules', label: 'Modules' },
+  { to: '/admin/schedule', label: 'Planning' },
 ]
 
 export default function AdminLayout({ children }) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="border-b bg-white px-6 py-3">
@@ -27,6 +37,12 @@ export default function AdminLayout({ children }) {
               </NavLink>
             ))}
           </nav>
+          <button
+            onClick={handleLogout}
+            className="ml-auto text-sm text-gray-500 hover:text-gray-700"
+          >
+            Se déconnecter
+          </button>
         </div>
       </div>
       {children}

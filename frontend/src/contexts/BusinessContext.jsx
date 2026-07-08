@@ -6,13 +6,15 @@ const BusinessContext = createContext(null)
 
 export function BusinessProvider({ children }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
-  const [businesses, setBusinesses]           = useState([])
+  // null = pas encore chargées pour la session en cours (distinct de [] = chargées, aucune entreprise) —
+  // sert de sentinelle pour dériver isLoading sans dépendre du timing de l'effet (l'effet ne peut pas
+  // mettre à jour un flag "isLoading" assez tôt pour le rendu qui suit immédiatement le login).
+  const [businesses, setBusinesses]           = useState(null)
   const [activeBusiness, setActiveState]      = useState(null)
-  const [isLoading, setIsLoading]             = useState(true)
 
   useEffect(() => {
     if (authLoading) return
-    if (!isAuthenticated) { setIsLoading(false); return }
+    if (!isAuthenticated) { setBusinesses(null); setActiveState(null); return }
 
     api.get('/api/v1/businesses')
       .then(data => {
@@ -21,8 +23,7 @@ export function BusinessProvider({ children }) {
         const saved   = data.find(b => b.id === savedId)
         setActiveState(saved || data[0] || null)
       })
-      .catch(() => {})
-      .finally(() => setIsLoading(false))
+      .catch(() => setBusinesses([]))
   }, [isAuthenticated, authLoading])
 
   function setActiveBusiness(business) {
@@ -41,11 +42,11 @@ export function BusinessProvider({ children }) {
 
   return (
     <BusinessContext.Provider value={{
-      businesses,
+      businesses: businesses || [],
       activeBusiness,
       setActiveBusiness,
-      isLoading,
-      hasBusinesses: businesses.length > 0,
+      isLoading: authLoading || (isAuthenticated && businesses === null),
+      hasBusinesses: !!businesses && businesses.length > 0,
       refresh,
     }}>
       {children}

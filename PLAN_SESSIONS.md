@@ -70,16 +70,16 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 |---|---------|---------|
 | 26 | Backend widgets | CRUD widgets, config JSON, génération embed code |
 | 27 | Widget carrousel | Composant JS embeddable (carrousel d'avis) |
-| 28 | Widget badge | Badge de note moyen, interface personnalisation |
+| 28 | Widget badge | ✅ Fait (2026-07-04) — « Lire plus » carrousel, anti-fuite renforcé (`/public` whitelist par mapping), badge tailles/formes en style framed. Voir `PROGRESS.md` Phase 8 |
 
 ## PHASE 9 — FINITIONS (Semaine 9)
 
 | # | Session | Contenu |
 |---|---------|---------|
-| 29 | Paramètres entreprise | Infos générales, notifications, slug |
+| 29 | Paramètres entreprise | ✅ Fait (2026-07-04) — logo/contact/adresse/notifications (migration 54), slug kebab-case + unicité. Voir `PROGRESS.md` Phase 9 |
 | 30 | Gestion équipe | ✅ Fait (2026-07-06) — module `team/` (invite/accept/list/role/remove), enforcement des rôles via `assertAccess(..., { write })` rétrocompatible (owner intact, viewer lecture seule) sur customers/campaigns/invitations/widgets/reviews, migration additive 56 `team_invitations` (invités sans compte, email chiffré), UI section Équipe dans Settings + page publique `/invitation`. Testé réel 28/28. Voir `PROGRESS.md` Phase 9 |
 | 31 | Profil & sécurité | Page profil utilisateur, changement mot de passe |
-| 32 | Super Admin | Panel admin global (tous les comptes, activation modules) |
+| 32 | Super Admin | ✅ Fait (2026-07-04, complété 2026-07-08) — panel `/admin/*` : Plans (CRUD complet + plafonds entreprises/localisations), Comptes (vue cross-tenant), Modules (activation hors plan, écriture seule pour l'instant), Planning (calendrier geogrid cross-tenant). Voir `PROGRESS.md` Phase 9 |
 | 33 | Polish UI | Responsive mobile, messages d'erreur, états vides, loaders |
 
 ## PHASE 10 — DÉPLOIEMENT (Semaine 10)
@@ -116,7 +116,7 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 | G9 | Frontend — Suivi | Vue globale + vue par mot-clé (lecture seule), tableaux triables (fiche + concurrents), heatmap réutilisée, courbes **Recharts** (période + jour/semaine/mois + moyenne/meilleure). |
 | G10 | Frontend — Concurrents | Page de comparaison vs concurrents (tableau + courbes de comparaison), sélection depuis concurrents détectés. |
 | G11 | Rapport email (v1) | Config email (destinataires, cadence bornée par plan), génération résumé chiffré + lien, envoi à la fin d'un run. |
-| G12 | Super Admin — quotas `rank_tracking` | Édition des plafonds par plan (mots-clés, dimension, formes, fréquences, concurrents) via `plans.module_quotas` — sans redéploiement (cf. cahier §10). |
+| G12 | Super Admin — quotas `rank_tracking` | ✅ Fait (2026-07-04) — édition des plafonds par plan via `/admin/plans` (`plans.module_quotas.rank_tracking`), sans redéploiement, absorbé dans la session 32. Voir `PROGRESS.md` Phase 11 |
 
 > *v2 ultérieure* : rapport **PDF** avec courbe (SVG généré côté serveur).
 

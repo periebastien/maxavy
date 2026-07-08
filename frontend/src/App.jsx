@@ -23,6 +23,7 @@ import WidgetBuilderPage from './pages/WidgetBuilderPage'
 import AdminPlansPage from './pages/AdminPlansPage'
 import AdminAccountsPage from './pages/AdminAccountsPage'
 import AdminModulesPage from './pages/AdminModulesPage'
+import AdminSchedulePage from './pages/AdminSchedulePage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
@@ -79,6 +80,7 @@ export default function App() {
       <Route path="/admin/plans"             element={<PrivateRoute requireRole="superadmin"><AdminPlansPage /></PrivateRoute>} />
       <Route path="/admin/accounts"          element={<PrivateRoute requireRole="superadmin"><AdminAccountsPage /></PrivateRoute>} />
       <Route path="/admin/modules"           element={<PrivateRoute requireRole="superadmin"><AdminModulesPage /></PrivateRoute>} />
+      <Route path="/admin/schedule"          element={<PrivateRoute requireRole="superadmin"><AdminSchedulePage /></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>
