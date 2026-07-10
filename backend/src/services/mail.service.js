@@ -36,6 +36,27 @@ async function sendResetEmail(to, resetUrl) {
   })
 }
 
+async function sendPasswordChangedEmail(to) {
+  await transporter.sendMail({
+    from: `"Locagain" <${process.env.MAIL_FROM}>`,
+    to,
+    subject: 'Votre mot de passe a été modifié',
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+        <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Mot de passe modifié</h2>
+        <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
+          Votre mot de passe Locagain a été modifié avec succès.<br><br>
+          Si vous n'êtes pas à l'origine de ce changement, réinitialisez immédiatement
+          votre mot de passe et contactez notre support.
+        </p>
+        <p style="color:#9B9BA8;font-size:12px;margin:24px 0 0;">
+          Cet email est envoyé automatiquement suite à un changement de mot de passe sur votre compte.
+        </p>
+      </div>
+    `,
+  })
+}
+
 async function sendInvitationEmail({ to, firstname, businessName, collectUrl }) {
   await transporter.sendMail({
     from: `"${businessName}" <${process.env.MAIL_FROM}>`,
@@ -93,4 +114,4 @@ async function sendTeamInviteEmail({ to, businessName, role, acceptUrl, isExisti
   })
 }
 
-module.exports = { sendResetEmail, sendInvitationEmail, sendTeamInviteEmail }
+module.exports = { sendResetEmail, sendPasswordChangedEmail, sendInvitationEmail, sendTeamInviteEmail }

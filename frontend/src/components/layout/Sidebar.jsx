@@ -199,11 +199,12 @@ function AccountMenu({ user }) {
 
       {open && (
         <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden">
-          {/* Sous-menu compte — s'étoffera avec les actions de compte */}
-          <div className="flex items-center justify-between px-3 py-2.5 text-sm text-text-tertiary cursor-default">
-            <span className="flex items-center gap-2"><User size={14} /> Mon compte</span>
-            <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">bientôt</span>
-          </div>
+          <button
+            onClick={() => { setOpen(false); navigate('/account') }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-text-secondary hover:bg-gray-50 hover:text-text-primary transition-colors"
+          >
+            <User size={14} /> Mon compte
+          </button>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-text-secondary hover:bg-red-50 hover:text-danger transition-colors border-t border-border"

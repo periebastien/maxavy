@@ -24,6 +24,7 @@ import AdminPlansPage from './pages/AdminPlansPage'
 import AdminAccountsPage from './pages/AdminAccountsPage'
 import AdminModulesPage from './pages/AdminModulesPage'
 import AdminSchedulePage from './pages/AdminSchedulePage'
+import AccountPage from './pages/AccountPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
@@ -77,6 +78,7 @@ export default function App() {
       <Route path="/positionnement"                element={<Navigate to="/positionnement/configuration" replace />} />
       <Route path="/credits"                 element={<PrivateRoute><RequireBusiness><CreditsPage /></RequireBusiness></PrivateRoute>} />
       <Route path="/pricing"                 element={<PrivateRoute><RequireBusiness><PricingPage /></RequireBusiness></PrivateRoute>} />
+      <Route path="/account"                 element={<PrivateRoute><AccountPage /></PrivateRoute>} />
       <Route path="/admin/plans"             element={<PrivateRoute requireRole="superadmin"><AdminPlansPage /></PrivateRoute>} />
       <Route path="/admin/accounts"          element={<PrivateRoute requireRole="superadmin"><AdminAccountsPage /></PrivateRoute>} />
       <Route path="/admin/modules"           element={<PrivateRoute requireRole="superadmin"><AdminModulesPage /></PrivateRoute>} />

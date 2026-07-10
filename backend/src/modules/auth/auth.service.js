@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
 const User = require('../../models/User')
-const { sendResetEmail } = require('../../services/mail.service')
+const { sendResetEmail, sendPasswordChangedEmail } = require('../../services/mail.service')
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
@@ -91,6 +91,47 @@ async function me(userId) {
   return sanitize(user)
 }
 
+async function updateProfile(userId, data) {
+  const user = await User.findByPk(userId)
+  if (!user) throw { status: 404, message: 'Utilisateur introuvable' }
+
+  const allowed = ['firstname', 'lastname', 'phone']
+  const changes = Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)))
+
+  await user.update(changes)
+  return sanitize(user)
+}
+
+async function changePassword(userId, { current_password, new_password }) {
+  const user = await User.findByPk(userId)
+  if (!user) throw { status: 404, message: 'Utilisateur introuvable' }
+
+  if (!user.password_hash) {
+    throw { status: 400, message: 'Ce compte utilise la connexion Google, aucun mot de passe à modifier' }
+  }
+
+  if (!new_password || String(new_password).length < 8) {
+    throw { status: 400, message: 'Le nouveau mot de passe doit contenir au moins 8 caractères' }
+  }
+
+  const valid = await bcrypt.compare(current_password || '', user.password_hash)
+  if (!valid) throw { status: 401, message: 'Mot de passe actuel incorrect' }
+
+  const samePassword = await bcrypt.compare(new_password, user.password_hash)
+  if (samePassword) {
+    throw { status: 400, message: 'Le nouveau mot de passe doit être différent de l\'actuel' }
+  }
+
+  const password_hash = await bcrypt.hash(new_password, 12)
+  await user.update({ password_hash })
+
+  try {
+    await sendPasswordChangedEmail(user.email)
+  } catch (err) {
+    console.error('[mail] Échec envoi email changement de mot de passe:', err.message)
+  }
+}
+
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
@@ -104,4 +145,4 @@ function sanitize(user) {
   return safe
 }
 
-module.exports = { register, login, googleAuth, forgotPassword, resetPassword, me }
+module.exports = { register, login, googleAuth, forgotPassword, resetPassword, me, updateProfile, changePassword }

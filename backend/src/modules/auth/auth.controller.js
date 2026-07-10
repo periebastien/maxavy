@@ -54,4 +54,22 @@ async function me(req, res) {
   }
 }
 
-module.exports = { register, login, googleAuth, forgotPassword, resetPassword, me }
+async function updateProfile(req, res) {
+  try {
+    const user = await service.updateProfile(req.user.id, req.body)
+    res.json(user)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+async function changePassword(req, res) {
+  try {
+    await service.changePassword(req.user.id, req.body)
+    res.json({ message: 'Mot de passe mis à jour avec succès.' })
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+module.exports = { register, login, googleAuth, forgotPassword, resetPassword, me, updateProfile, changePassword }

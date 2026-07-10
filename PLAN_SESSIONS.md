@@ -78,7 +78,7 @@ Chaque session = 1 tâche précise, validée avant de passer à la suivante.
 |---|---------|---------|
 | 29 | Paramètres entreprise | ✅ Fait (2026-07-04) — logo/contact/adresse/notifications (migration 54), slug kebab-case + unicité. Voir `PROGRESS.md` Phase 9 |
 | 30 | Gestion équipe | ✅ Fait (2026-07-06) — module `team/` (invite/accept/list/role/remove), enforcement des rôles via `assertAccess(..., { write })` rétrocompatible (owner intact, viewer lecture seule) sur customers/campaigns/invitations/widgets/reviews, migration additive 56 `team_invitations` (invités sans compte, email chiffré), UI section Équipe dans Settings + page publique `/invitation`. Testé réel 28/28. Voir `PROGRESS.md` Phase 9 |
-| 31 | Profil & sécurité | Page profil utilisateur, changement mot de passe |
+| 31 | Profil & sécurité | ✅ Fait (2026-07-10) — page `/account` (profil, changement mdp, mes entreprises), routes `PATCH /auth/me` + `PUT /auth/me/password`, cahier des charges `MON_COMPTE_DESIGN_FR.md`. Voir `PROGRESS.md` Phase 9 |
 | 32 | Super Admin | ✅ Fait (2026-07-04, complété 2026-07-08) — panel `/admin/*` : Plans (CRUD complet + plafonds entreprises/localisations), Comptes (vue cross-tenant), Modules (activation hors plan, écriture seule pour l'instant), Planning (calendrier geogrid cross-tenant). Voir `PROGRESS.md` Phase 9 |
 | 33 | Polish UI | Responsive mobile, messages d'erreur, états vides, loaders |
 

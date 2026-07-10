@@ -16,6 +16,7 @@ Docs de référence :
 - `WIDGETS_DESIGN_FR.md` — design system widgets (catalogue, config, gabarits)
 - `GEOGRID_DESIGN_FR.md` + `GEOGRID_REFONTE_FR.md` — suivi de positionnement (geogrid)
 - `AVIS_CONCURRENTS_FR.md` — suivi des avis de la concurrence
+- `MON_COMPTE_DESIGN_FR.md` — page Mon compte / profil & sécurité (session 31)
 
 ## Stack technique
 - **Frontend** : React 18 + Vite, JavaScript (pas TypeScript), TailwindCSS, React Router, Axios, Zustand
@@ -67,9 +68,10 @@ Deux serveurs distincts tournent en parallèle — ne jamais confondre :
 Note : le frontend Vite a du hot-reload (HMR) → il redémarre rarement ; le backend, lui, doit être relancé à la main après toute modif backend.
 
 ## État du projet (résumé — historique complet : `PROGRESS.md`)
-Mise à jour : 2026-07-08.
-- **Terminé et vérifié** : auth/OAuth Google, onboarding, collecte publique + QR, clients (chiffrement + consentement), invitations/campagnes (Brevo OK, Twilio stub), lecture des avis via DataForSEO (GMB abandonné en lecture, module `google/` OAuth inerte), widgets (5 styles, builder, anti-fuite), crédits/plans/Stripe (webhooks), geogrid complet G1→G13 (wizard config, suivi, concurrents, cron résilient retry 3 niveaux + circuit-breaker, portail débit DataForSEO partagé), avis concurrents AC1→AC3, panel Super Admin `/admin/*` (plans/comptes/modules/**planning**), paramètres entreprise, gestion d'équipe (session 30), responsive admin, correctif transverse isolation par localisation.
-- **Restant** : G11 (rapport email geogrid + consommation du hook `notify_failure`), Stripe prod (`stripe_price_id` des plans vides), pages légales/RGPD (mises de côté volontairement — à faire avec la partie visible du site), ops (PM2/Nginx/SSL, backups, monitoring, `/health`), tests automatisés/CI, session 31 (profil & sécurité).
+Mise à jour : 2026-07-10.
+- **Terminé et vérifié** : auth/OAuth Google, onboarding, collecte publique + QR, clients (chiffrement + consentement), invitations/campagnes (Brevo OK, Twilio stub), lecture des avis via DataForSEO (GMB abandonné en lecture, module `google/` OAuth inerte), widgets (5 styles, builder, anti-fuite), crédits/plans/Stripe (webhooks), geogrid complet G1→G13 (wizard config, suivi, concurrents, cron résilient retry 3 niveaux + circuit-breaker, portail débit DataForSEO partagé), avis concurrents AC1→AC3, panel Super Admin `/admin/*` (plans/comptes/modules/**planning**), paramètres entreprise, gestion d'équipe (session 30), **profil & sécurité (session 31 — page `/account`)**, responsive admin, correctif transverse isolation par localisation.
+- **Restant** : G11 (rapport email geogrid + consommation du hook `notify_failure`), Stripe prod (`stripe_price_id` des plans vides), pages légales/RGPD (mises de côté volontairement — à faire avec la partie visible du site), ops (PM2/Nginx/SSL, backups, monitoring, `/health`), tests automatisés/CI.
+- **Session 31 — Profil & sécurité terminée (2026-07-10)** : cahier `MON_COMPTE_DESIGN_FR.md`. Page `/account` (Profil / Sécurité / Mes entreprises), `PATCH /auth/me` (whitelist), `PUT /auth/me/password` (401 mdp faux, 400 compte Google, email notif Brevo), `my_role` dans `GET /businesses`, aucune migration. Piège corrigé : un 401 métier sur `/auth/me/password` déclenchait le logout centralisé → route ajoutée à `AUTH_PATHS` dans `frontend/src/lib/api.js`. v2 au cahier : changement email, mdp pour comptes Google, suppression compte (RGPD), 2FA, upload avatar.
 - **Session 22 (répondre aux avis) — mise de côté (décision 2026-07-06)** : DataForSEO est lecture seule (vérifié dans la doc officielle : `task_post` = tâche de collecte, ne publie rien). Ne sera développée que si un accès API Google Business Profile est obtenu. Le jour venu : fournisseur IA configurable depuis le Super Admin (Claude/OpenAI/autre), clé en `.env`.
 - **Sécurité (audit 2026-07-06)** : correctifs appliqués (webhook Stripe raw body, CORS+rate limit routes publiques widgets, JWT HS256 explicite, `requireRole` front, 401 centralisé). Dette restante : JWT en localStorage → cookie httpOnly à planifier.
 - **`business_modules`** : écrit par le panel admin mais lu par aucun module métier (gating réel = `plans.module_quotas`) — à consommer plus tard.

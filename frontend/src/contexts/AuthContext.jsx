@@ -50,8 +50,14 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  async function refreshUser() {
+    const data = await api.get('/api/v1/auth/me')
+    setUser(data)
+    return data
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, isAuthenticated: !!user, login, register, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isAuthenticated: !!user, login, register, loginWithGoogle, logout, setUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
