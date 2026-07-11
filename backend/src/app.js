@@ -11,7 +11,9 @@ const { startScanGeogridJob } = require('./jobs/scan-geogrid')
 
 const app = express()
 
-app.use(helmet())
+// CSP désactivée : le backend sert aussi le SPA React (Google Maps/OAuth chargés depuis des
+// domaines tiers) ; la CSP par défaut de helmet casserait la page. À durcir plus tard.
+app.use(helmet({ contentSecurityPolicy: false }))
 app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://gmbmanager.ai' : 'http://localhost:5173' }))
 
 // Webhook Stripe : body brut obligatoire pour la vérification de signature HMAC.
@@ -46,15 +48,43 @@ app.use('/api/v1/admin/business-modules', require('./modules/admin-modules/admin
 app.use('/api/v1/admin/schedule', require('./modules/admin-schedule/admin-schedule.routes'))
 app.use('/api/v1/admin/credits', require('./modules/admin-credits/admin-credits.routes'))
 
+// --- Front statique : SPA React buildé et déposé dans backend/public ---
+// Sert les fichiers du build, puis renvoie index.html pour toute route non-API
+// (routing côté client React Router).
+const path = require('path')
+const clientDir = path.join(__dirname, '../public')
+app.use(express.static(clientDir))
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next()
+  res.sendFile(path.join(clientDir, 'index.html'))
+})
+
 const PORT = process.env.PORT || 3000
 
+// Garde-fou anti-double-cron : sous Passenger (ou PM2) plusieurs instances du process peuvent
+// démarrer. On acquiert un verrou consultatif Postgres (niveau session) sur une connexion dédiée
+// jamais relâchée : une seule instance l'obtient et lance donc les crons. Les autres s'abstiennent.
+async function startCronsIfPrimary() {
+  const conn = await sequelize.connectionManager.getConnection()
+  const res = await conn.query('SELECT pg_try_advisory_lock(4021957) AS locked')
+  const locked = res.rows[0].locked
+  if (!locked) {
+    sequelize.connectionManager.releaseConnection(conn)
+    console.log('[cron] verrou déjà détenu par une autre instance — jobs non démarrés')
+    return
+  }
+  // Connexion volontairement NON relâchée : le verrou de session persiste tant que le process vit.
+  console.log('[cron] instance primaire — jobs démarrés')
+  startScheduledInvitationsJob()
+  startSyncReviewsJob()
+  startScanGeogridJob()
+}
+
 sequelize.authenticate()
-  .then(() => {
+  .then(async () => {
     console.log('PostgreSQL connecté')
-    startScheduledInvitationsJob()
-    startSyncReviewsJob()
-    startScanGeogridJob()
-    app.listen(PORT, () => console.log(`Backend GMB Manager sur http://localhost:${PORT}`))
+    await startCronsIfPrimary()
+    app.listen(PORT, () => console.log(`Backend GMB Manager démarré sur le port ${PORT}`))
   })
   .catch(err => {
     console.error('Erreur connexion DB :', err.message)

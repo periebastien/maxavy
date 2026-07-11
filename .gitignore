@@ -1,6 +1,7 @@
 # Environnement
 .env
 .env.local
+.env.production
 
 # Dépendances
 node_modules/
