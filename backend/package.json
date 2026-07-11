@@ -1,7 +1,7 @@
 {
   "name": "locagain-backend",
   "version": "1.0.0",
-  "description": "Locagain — Backend API",
+  "description": "GMB Manager — Backend API",
   "main": "src/app.js",
   "scripts": {
     "dev": "nodemon src/app.js",

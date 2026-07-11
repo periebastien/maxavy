@@ -1,7 +1,7 @@
 {
   "name": "locagain-frontend",
   "version": "1.0.0",
-  "description": "Locagain — Frontend React",
+  "description": "GMB Manager — Frontend React",
   "type": "module",
   "scripts": {
     "dev": "vite",

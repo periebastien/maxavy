@@ -236,7 +236,7 @@ export default function Sidebar({ user, open = false, onClose }) {
     >
       {/* Logo + fermeture mobile */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <span className="text-lg font-semibold text-accent">Locagain</span>
+        <span className="text-lg font-semibold text-accent">GMB Manager</span>
         <button onClick={onClose} className="lg:hidden text-text-tertiary hover:text-text-primary" aria-label="Fermer le menu">
           <X size={18} />
         </button>

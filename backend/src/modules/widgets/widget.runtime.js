@@ -312,7 +312,7 @@ function LOCAGAIN_RUNTIME() {
     var pal = resolve(cfg)
     loadFont(root, pal.fontKey)
     var pbHtml = cfg.common.showPoweredBy
-      ? '<div class="lcg-pb"><a href="https://locagain.com" target="_blank" rel="noopener">Propulsé par Locagain</a></div>'
+      ? '<div class="lcg-pb"><a href="https://gmbmanager.ai" target="_blank" rel="noopener">Propulsé par GMB Manager</a></div>'
       : ''
     var part = payload.type === 'badge' ? badgeHtml(payload, pal, pbHtml) : carouselHtml(payload, pal)
     var outerPb = payload.type === 'badge' ? '' : pbHtml

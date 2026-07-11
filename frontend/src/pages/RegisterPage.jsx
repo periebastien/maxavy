@@ -46,7 +46,7 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center w-10 h-10 bg-accent rounded-xl mb-3">
             <span className="text-white font-bold text-lg">L</span>
           </div>
-          <h1 className="text-xl font-bold text-text-primary">Locagain</h1>
+          <h1 className="text-xl font-bold text-text-primary">GMB Manager</h1>
           <p className="text-text-secondary text-sm mt-1">Créez votre compte</p>
         </div>
 

@@ -257,7 +257,7 @@ export default function CollectPage() {
 
         {/* Powered by — masquable plus tard (plans payants, cf. cahier branding) */}
         <p className="text-center text-xs text-text-tertiary mt-6">
-          Propulsé par <span className="font-medium text-text-secondary">Locagain</span>
+          Propulsé par <span className="font-medium text-text-secondary">GMB Manager</span>
         </p>
       </div>
     </div>

@@ -12,14 +12,14 @@ const transporter = nodemailer.createTransport({
 
 async function sendResetEmail(to, resetUrl) {
   await transporter.sendMail({
-    from: `"Locagain" <${process.env.MAIL_FROM}>`,
+    from: `"GMB Manager" <${process.env.MAIL_FROM}>`,
     to,
     subject: 'Réinitialisation de votre mot de passe',
     html: `
       <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
         <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Réinitialisation du mot de passe</h2>
         <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
-          Vous avez demandé à réinitialiser votre mot de passe Locagain.<br>
+          Vous avez demandé à réinitialiser votre mot de passe GMB Manager.<br>
           Ce lien est valable <strong>1 heure</strong>.
         </p>
         <a href="${resetUrl}"
@@ -38,14 +38,14 @@ async function sendResetEmail(to, resetUrl) {
 
 async function sendPasswordChangedEmail(to) {
   await transporter.sendMail({
-    from: `"Locagain" <${process.env.MAIL_FROM}>`,
+    from: `"GMB Manager" <${process.env.MAIL_FROM}>`,
     to,
     subject: 'Votre mot de passe a été modifié',
     html: `
       <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
         <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Mot de passe modifié</h2>
         <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
-          Votre mot de passe Locagain a été modifié avec succès.<br><br>
+          Votre mot de passe GMB Manager a été modifié avec succès.<br><br>
           Si vous n'êtes pas à l'origine de ce changement, réinitialisez immédiatement
           votre mot de passe et contactez notre support.
         </p>
@@ -88,14 +88,14 @@ const ROLE_LABELS = { admin: 'Administrateur', editor: 'Éditeur', viewer: 'Lect
 
 async function sendTeamInviteEmail({ to, businessName, role, acceptUrl, isExistingUser }) {
   await transporter.sendMail({
-    from: `"Locagain" <${process.env.MAIL_FROM}>`,
+    from: `"GMB Manager" <${process.env.MAIL_FROM}>`,
     to,
-    subject: `Invitation à rejoindre ${businessName} sur Locagain`,
+    subject: `Invitation à rejoindre ${businessName} sur GMB Manager`,
     html: `
       <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
         <h2 style="color:#1A1A23;font-size:20px;margin:0 0 8px;">Vous êtes invité·e</h2>
         <p style="color:#6B6B78;font-size:14px;margin:0 0 24px;">
-          Vous avez été invité·e à rejoindre l'équipe de <strong>${businessName}</strong> sur Locagain
+          Vous avez été invité·e à rejoindre l'équipe de <strong>${businessName}</strong> sur GMB Manager
           en tant que <strong>${ROLE_LABELS[role] || role}</strong>.<br><br>
           ${isExistingUser
             ? 'Connectez-vous avec votre compte existant pour accepter cette invitation.'

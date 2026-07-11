@@ -12,7 +12,7 @@ const { startScanGeogridJob } = require('./jobs/scan-geogrid')
 const app = express()
 
 app.use(helmet())
-app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://locagain.com' : 'http://localhost:5173' }))
+app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://gmbmanager.ai' : 'http://localhost:5173' }))
 
 // Webhook Stripe : body brut obligatoire pour la vérification de signature HMAC.
 // Doit être monté AVANT express.json() global, sinon le body arrive déjà parsé en objet JS.
@@ -54,7 +54,7 @@ sequelize.authenticate()
     startScheduledInvitationsJob()
     startSyncReviewsJob()
     startScanGeogridJob()
-    app.listen(PORT, () => console.log(`Backend Locagain sur http://localhost:${PORT}`))
+    app.listen(PORT, () => console.log(`Backend GMB Manager sur http://localhost:${PORT}`))
   })
   .catch(err => {
     console.error('Erreur connexion DB :', err.message)

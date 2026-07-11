@@ -238,7 +238,7 @@ export default function CollectSettingsPage() {
               </div>
             </div>
             <Toggle
-              label='Afficher "Propulsé par Locagain"'
+              label='Afficher "Propulsé par GMB Manager"'
               description="Réservé aux plans payants — la désactivation sera grisée sur le plan gratuit."
               checked={cfg.branding.show_powered_by}
               onChange={v => setBranding('show_powered_by', v)}

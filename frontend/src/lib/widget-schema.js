@@ -70,7 +70,7 @@ export const FIELDS = [
   { scope: 'common', key: 'minRating', label: 'Note minimale affichée', type: 'number', section: 'contenu', min: 0, max: 5, step: 1 },
   { scope: 'common', key: 'showGoogleLogo', label: 'Logo Google', type: 'bool', section: 'contenu' },
   { scope: 'common', key: 'showGoogleLabel', label: 'Mention « Google »', type: 'bool', section: 'contenu' },
-  { scope: 'common', key: 'showPoweredBy', label: 'Propulsé par Locagain', type: 'bool', section: 'contenu', note: 'Verrouillé en plan gratuit' },
+  { scope: 'common', key: 'showPoweredBy', label: 'Propulsé par GMB Manager', type: 'bool', section: 'contenu', note: 'Verrouillé en plan gratuit' },
 
   // ---- BADGE · apparence
   { scope: 'badge', key: 'shape', label: 'Forme', type: 'enum', section: 'apparence', options: [['pill', 'Pilule'], ['rounded', 'Arrondi'], ['square', 'Carré']] },
