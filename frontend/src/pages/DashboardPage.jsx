@@ -51,7 +51,7 @@ export default function DashboardPage() {
 
   const { locations = [], hasLocations, activeLocation } = useLocations() || {}
   const hasWebsite = !!activeBusiness?.website_url
-  const credits    = activeBusiness?.credit_balance ?? 0
+  const [credits, setCredits] = useState(0)
 
   const [customerStats, setCustomerStats]     = useState(null)
   const [qrVisited, setQrVisited]             = useState(false)
@@ -62,6 +62,9 @@ export default function DashboardPage() {
     if (!activeBusiness) return
     setQrVisited(!!localStorage.getItem(`qr_visited_${activeBusiness.id}`))
     const locParam = activeLocation ? `&location_id=${activeLocation.id}` : ''
+    api.get(`/api/v1/credits/balance?business_id=${activeBusiness.id}`)
+      .then(b => setCredits(b.balance ?? 0))
+      .catch(() => {})
     Promise.all([
       api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}${locParam}`),
       api.get(`/api/v1/google/status?businessId=${activeBusiness.id}`),
@@ -149,7 +152,7 @@ export default function DashboardPage() {
           {/* Premiers pas — 2/3 */}
           <div className="lg:col-span-2 bg-white border border-border rounded-xl p-5">
             <p className="text-sm font-semibold text-text-primary mb-1">Premiers pas</p>
-            <p className="text-xs text-text-secondary mb-4">Complétez ces étapes pour tirer le meilleur de Locagain.</p>
+            <p className="text-xs text-text-secondary mb-4">Complétez ces étapes pour tirer le meilleur de GMB Manager.</p>
             <div>
               <StepItem done label="Compte créé" />
               <StepItem done label="Premier établissement configuré" />

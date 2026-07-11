@@ -24,8 +24,8 @@ async function history(req, res) {
 
 async function add(req, res) {
   try {
-    const business = await service.addCredits(req.query.business_id, req.user.id, req.body)
-    res.json({ credit_balance: business.credit_balance })
+    const owner = await service.addCredits(req.query.business_id, req.user.id, req.body)
+    res.json({ credit_balance: owner.credit_balance })
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })
   }

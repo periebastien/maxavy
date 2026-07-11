@@ -11,11 +11,20 @@ async function list(req, res) {
 
 async function updatePlan(req, res) {
   try {
-    const business = await service.updatePlan(req.params.businessId, req.body.plan_id ?? null)
-    res.json({ id: business.id, plan_id: business.plan_id })
+    const user = await service.updatePlan(req.params.businessId, req.body.plan_id ?? null)
+    res.json({ id: user.id, plan_id: user.plan_id })
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message })
   }
 }
 
-module.exports = { list, updatePlan }
+async function updateOwnerPlan(req, res) {
+  try {
+    const user = await service.updateOwnerPlan(req.params.userId, req.body.plan_id ?? null)
+    res.json({ id: user.id, plan_id: user.plan_id })
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
+module.exports = { list, updatePlan, updateOwnerPlan }

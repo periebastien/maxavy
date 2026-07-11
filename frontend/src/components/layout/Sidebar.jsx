@@ -12,6 +12,7 @@ import { useClickOutside } from '../../lib/useClickOutside'
 import { faviconUrl } from '../../lib/favicon'
 import { gravatarUrl } from '../../lib/gravatar'
 import EntityAvatar from '../common/EntityAvatar'
+import api from '../../lib/api'
 
 const sections = [
   {
@@ -220,7 +221,14 @@ function AccountMenu({ user }) {
 export default function Sidebar({ user, open = false, onClose }) {
   const { activeBusiness } = useBusiness()
   const { locations = [] } = useLocations() || {}
-  const credits = activeBusiness?.credit_balance ?? 0
+  const [credits, setCredits] = useState(0)
+
+  useEffect(() => {
+    if (!activeBusiness) return
+    api.get(`/api/v1/credits/balance?business_id=${activeBusiness.id}`)
+      .then(b => setCredits(b.balance ?? 0))
+      .catch(() => {})
+  }, [activeBusiness])
 
   return (
     <aside

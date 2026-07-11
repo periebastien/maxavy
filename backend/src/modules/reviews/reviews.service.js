@@ -11,7 +11,9 @@ const CompetitorReview = require('../../models/CompetitorReview')
 const ReviewCompetitorTracking = require('../../models/ReviewCompetitorTracking')
 const GeogridConfig = require('../../models/GeogridConfig')
 const GeogridCompetitor = require('../../models/GeogridCompetitor')
+const User = require('../../models/User')
 const { assertAccess } = require('../businesses/business.service')
+const { getPlanForBusiness } = require('../../services/plan-resolver')
 const provider = require('./providers/dataforseo-reviews.provider')
 const config = require('./reviews.config')
 
@@ -32,7 +34,7 @@ async function ensureBusinessAccess(businessId, userId) {
 // Pas de plan / clé absente / enabled=false → synchro non disponible (Gratuit exclu). interval_minutes
 // pilote la cadence de synchro automatique par fiche.
 async function getReviewsQuota(business) {
-  const plan = business.plan_id ? await Plan.findByPk(business.plan_id) : null
+  const plan = await getPlanForBusiness(business)
   const quota = plan?.module_quotas?.reviews
   return quota?.enabled ? quota : { enabled: false }
 }
@@ -70,9 +72,22 @@ async function hasActiveJob(locationId, competitorPlaceId = null) {
 async function getEligibleBusinesses() {
   const plans = await Plan.findAll()
   const quotaByPlan = new Map(plans.filter(p => p.module_quotas?.reviews?.enabled).map(p => [p.id, p.module_quotas.reviews]))
-  if (!quotaByPlan.size) return { businesses: [], quotaByPlan }
-  const businesses = await Business.findAll({ where: { plan_id: { [Op.in]: [...quotaByPlan.keys()] } } })
-  return { businesses, quotaByPlan }
+  const empty = { businesses: [], quotaByBusiness: new Map() }
+  if (!quotaByPlan.size) return empty
+
+  const gratuit = plans.find(p => p.name === 'Gratuit')
+  const gratuitQuota = gratuit ? quotaByPlan.get(gratuit.id) : null
+  const ownerWhere = gratuitQuota
+    ? { [Op.or]: [{ plan_id: { [Op.in]: [...quotaByPlan.keys()] } }, { plan_id: null }] }
+    : { plan_id: { [Op.in]: [...quotaByPlan.keys()] } }
+
+  const owners = await User.findAll({ where: ownerWhere })
+  if (!owners.length) return empty
+  const quotaByOwner = new Map(owners.map(u => [u.id, u.plan_id ? quotaByPlan.get(u.plan_id) : gratuitQuota]))
+
+  const businesses = await Business.findAll({ where: { owner_id: { [Op.in]: owners.map(u => u.id) } } })
+  const quotaByBusiness = new Map(businesses.map(b => [b.id, quotaByOwner.get(b.owner_id)]))
+  return { businesses, quotaByBusiness }
 }
 
 // Crée un job + soumet la tâche. kind = backfill (1er passage, profondeur élevée) tant que la fiche n'a
@@ -312,7 +327,7 @@ async function upsertCompetitorReviews(tracking, businessId, items) {
 // n'ont pas déjà un job actif. Borné à batchSize/tick pour étaler. Avance next_reviews_sync_at AVANT le
 // submit (anti-boucle : un submit en échec ne redéclenche pas la fiche à chaque tick).
 async function enqueueDueLocations(batchSize) {
-  const { businesses, quotaByPlan } = await getEligibleBusinesses()
+  const { businesses, quotaByBusiness } = await getEligibleBusinesses()
   if (!businesses.length) return { enqueued: 0, skipped: 0, failed: 0 }
   const bizById = new Map(businesses.map(b => [b.id, b]))
 
@@ -333,7 +348,7 @@ async function enqueueDueLocations(batchSize) {
     if (enqueued >= batchSize) break
     if (await hasActiveJob(loc.id)) { skipped++; continue }
     const business = bizById.get(loc.business_id)
-    const quota = quotaByPlan.get(business.plan_id)
+    const quota = quotaByBusiness.get(business.id)
     await loc.update({ next_reviews_sync_at: computeNextSyncAt(loc.id, quota.interval_minutes, Date.now()) })
     try {
       await enqueueSyncForLocation(loc, business)

@@ -1,6 +1,7 @@
 const { Op } = require('sequelize')
 const Credit = require('../../models/Credit')
 const Business = require('../../models/Business')
+const User = require('../../models/User')
 const TeamMember = require('../../models/TeamMember')
 
 async function assertBusiness(businessId, userId) {
@@ -15,6 +16,7 @@ async function assertBusiness(businessId, userId) {
 
 async function getBalance(businessId, userId) {
   const business = await assertBusiness(businessId, userId)
+  const owner = await User.findByPk(business.owner_id)
   const totalEarned = await Credit.sum('amount', {
     where: { business_id: businessId, amount: { [Op.gt]: 0 } },
   }) || 0
@@ -22,7 +24,7 @@ async function getBalance(businessId, userId) {
     where: { business_id: businessId, amount: { [Op.lt]: 0 } },
   }) || 0
   return {
-    balance: business.credit_balance,
+    balance: owner?.credit_balance ?? 0,
     total_earned: totalEarned,
     total_spent: Math.abs(totalSpent),
   }
@@ -44,23 +46,22 @@ async function addCredits(businessId, userId, { amount, action_type, source = 'b
   const business = await assertBusiness(businessId, userId)
   if (amount <= 0) throw { status: 400, message: 'Montant invalide' }
   await Credit.create({ business_id: businessId, amount, action_type, source })
-  await business.increment('credit_balance', { by: amount })
-  return Business.findByPk(businessId)
+  await User.increment('credit_balance', { by: amount, where: { id: business.owner_id } })
+  return User.findByPk(business.owner_id)
 }
 
 // Utilisé à la création d'entreprise (sans vérification d'accès — appelé en interne)
 async function grantWelcomeCredits(businessId) {
   const WELCOME = 50
+  const business = await Business.findByPk(businessId)
+  if (!business) return
   await Credit.create({
     business_id: businessId,
     amount:      WELCOME,
     action_type: 'welcome',
     source:      'bonus',
   })
-  await Business.update(
-    { credit_balance: WELCOME },
-    { where: { id: businessId } },
-  )
+  await User.increment('credit_balance', { by: WELCOME, where: { id: business.owner_id } })
 }
 
 module.exports = { getBalance, getHistory, addCredits, grantWelcomeCredits }

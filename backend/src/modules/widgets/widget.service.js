@@ -6,9 +6,9 @@ const Review = require('../../models/Review')
 const ReviewTag = require('../../models/ReviewTag')
 const Location = require('../../models/Location')
 const Tag = require('../../models/Tag')
-const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
 const { mergeDefaults } = require('./widget.defaults')
+const { getPlanForBusiness } = require('../../services/plan-resolver')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const APP_URL = () => process.env.APP_URL || 'http://localhost:3000'
@@ -28,8 +28,8 @@ function googleReviewUrl(placeId) {
 }
 
 async function isFreePlan(business) {
-  if (!business || !business.plan_id) return true
-  const plan = await Plan.findByPk(business.plan_id)
+  if (!business) return true
+  const plan = await getPlanForBusiness(business)
   if (!plan) return true
   return Number(plan.price) === 0
 }

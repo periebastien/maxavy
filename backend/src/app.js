@@ -44,6 +44,7 @@ app.use('/api/v1/admin/plans', require('./modules/plans-admin/plans-admin.routes
 app.use('/api/v1/admin/accounts', require('./modules/admin-accounts/admin-accounts.routes'))
 app.use('/api/v1/admin/business-modules', require('./modules/admin-modules/admin-modules.routes'))
 app.use('/api/v1/admin/schedule', require('./modules/admin-schedule/admin-schedule.routes'))
+app.use('/api/v1/admin/credits', require('./modules/admin-credits/admin-credits.routes'))
 
 const PORT = process.env.PORT || 3000
 

@@ -6,5 +6,6 @@ const { superAdminMiddleware } = require('../../middlewares/super-admin.middlewa
 router.use(authMiddleware, superAdminMiddleware)
 router.get('/', ctrl.list)
 router.put('/:businessId/plan', ctrl.updatePlan)
+router.put('/owner/:userId/plan', ctrl.updateOwnerPlan)
 
 module.exports = router

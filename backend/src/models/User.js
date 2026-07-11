@@ -13,6 +13,10 @@ const User = sequelize.define('User', {
   email_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
   google_id:      { type: DataTypes.STRING, allowNull: true, unique: true },
   auth_provider:  { type: DataTypes.ENUM('local', 'google'), defaultValue: 'local' },
+  plan_id:                 { type: DataTypes.UUID, allowNull: true },
+  stripe_customer_id:      { type: DataTypes.STRING, allowNull: true },
+  stripe_subscription_id:  { type: DataTypes.STRING, allowNull: true },
+  credit_balance:          { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName: 'users',
   underscored: true,

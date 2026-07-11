@@ -3,8 +3,8 @@ const GeogridKeyword = require('../../models/GeogridKeyword')
 const GeogridConfig = require('../../models/GeogridConfig')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
-const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
+const { getPlanForBusiness } = require('../../services/plan-resolver')
 const { buildGrid } = require('./geogrid.utils')
 const { computeNextRunAt, isValidTimezone } = require('./schedule.utils')
 
@@ -31,7 +31,7 @@ async function ensureLocation(locationId, businessId) {
 // Quota geogrid du plan de l'entreprise (clé "rank_tracking" de plans.module_quotas).
 // Pas de plan / plan sans cette clé / enabled=false → module non disponible.
 async function getQuota(business) {
-  const plan = business.plan_id ? await Plan.findByPk(business.plan_id) : null
+  const plan = await getPlanForBusiness(business)
   const quota = plan?.module_quotas?.rank_tracking
   return quota?.enabled ? quota : { enabled: false }
 }

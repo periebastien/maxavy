@@ -6,6 +6,7 @@ const TABS = [
   { to: '/admin/accounts', label: 'Comptes' },
   { to: '/admin/modules', label: 'Modules' },
   { to: '/admin/schedule', label: 'Planning' },
+  { to: '/admin/credits', label: 'Crédits' },
 ]
 
 export default function AdminLayout({ children }) {

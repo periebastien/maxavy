@@ -9,6 +9,9 @@ const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const GeogridCompetitor = require('../../models/GeogridCompetitor')
 const GeogridScanCompetitor = require('../../models/GeogridScanCompetitor')
+const User = require('../../models/User')
+const Credit = require('../../models/Credit')
+const { getCost } = require('../../services/credit-costs')
 const { buildGrid } = require('./geogrid.utils')
 const { computeNextRunAt, computeNextRunAtSkipping } = require('./schedule.utils')
 const { computeBackoffMs } = require('./retry.utils')
@@ -86,7 +89,9 @@ async function loadConfigForKeyword(keyword) {
 // l'endpoint manuel (createScan, ad-hoc, runId absent) et le lancement d'un rapport planifié
 // (launchRunForConfig, runId présent). Grille/centre viennent de la config du mot-clé, pas du mot-clé
 // lui-même (cutover G6 — voir GEOGRID_REFONTE_FR.md §16).
-async function submitScanForKeyword(keyword, { runId } = {}) {
+// trigger : 'manual' (créateScan/createRun, appel HTTP synchrone) → 402 levé si crédits insuffisants ;
+// 'scheduled' (cron) → scan marqué 'failed' sans lever, pas de retry (voir plus bas).
+async function submitScanForKeyword(keyword, { runId, trigger = 'manual' } = {}) {
   const businessId = keyword.business_id
   const config = await loadConfigForKeyword(keyword)
 
@@ -120,6 +125,27 @@ async function submitScanForKeyword(keyword, { runId } = {}) {
     id: p.id, scan_id: scan.id, business_id: businessId,
     row: p.row, col: p.col, quadrant: p.quadrant, lat: p.lat, lng: p.lng, provider_task_id: null,
   })))
+
+  // Débit crédits — UNE fois par scan, ici (jamais dans postScanTasks : les reprises Level A/B/C rappellent
+  // postScanTasks sur ce même scan sans repasser par submitScanForKeyword, donc pas de re-débit).
+  const business = await Business.findByPk(businessId)
+  const costPerPoint = await getCost('geogrid_point')
+  const totalCost = costPerPoint * pointSpecs.length
+  const owner = business ? await User.findByPk(business.owner_id) : null
+
+  if (!owner || owner.credit_balance < totalCost) {
+    await scan.update({
+      status: 'failed',
+      error_message: 'Crédits insuffisants',
+      next_attempt_at: null,
+      retry_reason: null,
+    })
+    if (trigger === 'manual') throw { status: 402, message: 'Crédits insuffisants' }
+    return GeogridScan.findByPk(scan.id)
+  }
+
+  await User.decrement('credit_balance', { by: totalCost, where: { id: owner.id } })
+  await Credit.create({ business_id: businessId, amount: -totalCost, action_type: 'geogrid_scan', source: 'plan' })
 
   return postScanTasks(scan)
 }
@@ -375,15 +401,15 @@ async function createRunRow(config, trigger, scheduledFor, keywordCount) {
 // has_failures n'est PLUS posé ici : closeFinishedRuns le calcule d'après le statut FINAL des scans (un
 // blip transport devient retry_pending, pas un échec définitif). Promise.allSettled isole les erreurs de
 // setup (config/localisation absente) — le mot-clé concerné n'aura pas de scan → détecté à la clôture.
-async function submitRunScans(run, keywords) {
+async function submitRunScans(run, keywords, trigger) {
   if (!keywords.length) return
-  await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id })))
+  await Promise.allSettled(keywords.map(kw => submitScanForKeyword(kw, { runId: run.id, trigger })))
 }
 
 async function launchRun(config, trigger, scheduledFor) {
   const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
   const run = await createRunRow(config, trigger, scheduledFor, keywords.length)
-  await submitRunScans(run, keywords)
+  await submitRunScans(run, keywords, trigger)
   return run
 }
 
@@ -399,7 +425,7 @@ async function launchRunForConfig(config) {
   const keywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true } })
   const run = await createRunRow(config, 'scheduled', anchor, keywords.length)
   await config.update({ next_run_at: computeNextRunAtSkipping(config, timezone, anchor) })
-  await submitRunScans(run, keywords)
+  await submitRunScans(run, keywords, 'scheduled')
   return run
 }
 

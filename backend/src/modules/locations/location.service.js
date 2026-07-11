@@ -1,14 +1,12 @@
 const Location = require('../../models/Location')
 const Business = require('../../models/Business')
-const Plan = require('../../models/Plan')
 const { assertAccess } = require('../businesses/business.service')
+const { getPlanForBusiness } = require('../../services/plan-resolver')
 
-// Plafond du nombre de localisations pour une entreprise : celui de son plan, ou celui du plan
-// Gratuit si l'entreprise n'a pas encore de plan actif (plan_id NULL). NULL = illimité.
+// Plafond du nombre de localisations pour une entreprise : celui du plan de son owner, ou celui du
+// plan Gratuit si l'owner n'a pas encore de plan actif (plan_id NULL). NULL = illimité.
 async function maxLocationsFor(business) {
-  const plan = business.plan_id
-    ? await Plan.findByPk(business.plan_id)
-    : await Plan.findOne({ where: { name: 'Gratuit' } })
+  const plan = await getPlanForBusiness(business)
   return plan?.max_locations ?? null
 }
 

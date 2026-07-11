@@ -17,11 +17,16 @@ const ACTION_LABELS = {
 const LIMIT = 20
 
 function PackCard({ pack, onBuy, loading }) {
+  const perCredit = pack.price_per_credit != null
+    ? pack.price_per_credit
+    : pack.credits ? Number(pack.price) / pack.credits : 0
+
   return (
     <div className="bg-white border border-border rounded-xl p-4 flex items-center justify-between gap-4">
       <div>
         <p className="text-sm font-semibold text-text-primary">{pack.credits} crédits</p>
         <p className="text-xs text-text-tertiary">{pack.label}</p>
+        <p className="text-xs text-text-tertiary mt-0.5">{perCredit.toFixed(3)} €/crédit</p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-base font-bold text-text-primary">{pack.price}€</span>
@@ -116,7 +121,10 @@ export default function CreditsPage() {
   return (
     <AppLayout>
       <div className="p-6 space-y-6 max-w-2xl mx-auto">
-        <h1 className="text-xl font-semibold text-text-primary">Crédits</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">Crédits</h1>
+          <p className="text-xs text-text-tertiary mt-0.5">Solde partagé entre toutes les entreprises de votre compte</p>
+        </div>
 
         {/* Carte solde */}
         <div className="bg-white rounded-xl border border-border p-5 space-y-4">
@@ -125,7 +133,7 @@ export default function CreditsPage() {
               <Zap size={18} className="text-accent" />
             </div>
             <div>
-              <p className="text-xs text-text-tertiary">Solde actuel</p>
+              <p className="text-xs text-text-tertiary">Solde actuel du compte</p>
               <p className="text-2xl font-bold text-text-primary">{stats?.balance ?? '—'}</p>
             </div>
           </div>
@@ -168,7 +176,7 @@ export default function CreditsPage() {
 
         {/* Historique */}
         <div className="bg-white rounded-xl border border-border p-5">
-          <h2 className="text-sm font-semibold text-text-primary mb-4">Historique</h2>
+          <h2 className="text-sm font-semibold text-text-primary mb-4">Historique (cette entreprise)</h2>
 
           {isLoading ? (
             <div className="flex justify-center py-8">

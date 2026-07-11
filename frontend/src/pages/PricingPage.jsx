@@ -4,6 +4,7 @@ import AppLayout from '../components/layout/AppLayout'
 import Button from '../components/common/Button'
 import Badge from '../components/common/Badge'
 import { useBusiness } from '../contexts/BusinessContext'
+import { useAuth } from '../contexts/AuthContext'
 import api from '../lib/api'
 
 function PlanCard({ plan, current, onSubscribe, loading }) {
@@ -58,6 +59,7 @@ function PlanCard({ plan, current, onSubscribe, loading }) {
 
 export default function PricingPage() {
   const { activeBusiness } = useBusiness()
+  const { user } = useAuth()
   const [plans, setPlans]     = useState([])
   const [currentPlan, setCurrentPlan] = useState(null)
   const [loading, setLoading] = useState(null)
@@ -68,9 +70,9 @@ export default function PricingPage() {
   }, [])
 
   useEffect(() => {
-    if (!activeBusiness?.plan_id || !plans.length) return
-    setCurrentPlan(plans.find(p => p.id === activeBusiness.plan_id) || null)
-  }, [activeBusiness, plans])
+    if (!user?.plan_id || !plans.length) return
+    setCurrentPlan(plans.find(p => p.id === user.plan_id) || null)
+  }, [user, plans])
 
   async function handleSubscribe(planId) {
     if (!activeBusiness) return

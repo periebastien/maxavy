@@ -6,8 +6,10 @@ const Customer = require('../models/Customer')
 const Business = require('../models/Business')
 const Location = require('../models/Location')
 const Credit = require('../models/Credit')
+const User = require('../models/User')
 const { decrypt } = require('../config/encryption')
 const { sendInvitationEmail } = require('../services/mail.service')
+const { getCost } = require('../services/credit-costs')
 
 async function processOne(inv) {
   const [customer, business, location] = await Promise.all([
@@ -21,7 +23,9 @@ async function processOne(inv) {
     return 'failed'
   }
 
-  if (business.credit_balance <= 0) {
+  const cost = await getCost('invitation_email')
+  const owner = await User.findByPk(business.owner_id)
+  if (!owner || owner.credit_balance < cost) {
     // Pas de crédit — on met la campagne en pause si applicable
     if (inv.campaign_id) {
       await InvitationCampaign.update({ status: 'paused' }, { where: { id: inv.campaign_id } })
@@ -57,8 +61,8 @@ async function processOne(inv) {
   }
 
   await inv.update({ status: 'sent', sent_at: new Date() })
-  await business.decrement('credit_balance', { by: 1 })
-  await Credit.create({ business_id: inv.business_id, amount: -1, action_type: 'invitation', source: 'plan' })
+  await User.decrement('credit_balance', { by: cost, where: { id: business.owner_id } })
+  await Credit.create({ business_id: inv.business_id, amount: -cost, action_type: 'invitation', source: 'plan' })
   await customer.update({ status: 'invited' })
 
   if (inv.campaign_id) {

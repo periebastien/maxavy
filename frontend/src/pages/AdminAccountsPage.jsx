@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import api from '../lib/api'
 import AdminLayout from '../components/layout/AdminLayout'
 
@@ -9,8 +10,7 @@ function formatDate(d) {
 
 function ownerLabel(owner) {
   if (!owner) return '—'
-  const name = [owner.firstname, owner.lastname].filter(Boolean).join(' ')
-  return name ? `${name} (${owner.email})` : owner.email
+  return owner.name ? `${owner.name} (${owner.email})` : owner.email
 }
 
 function PlanSelect({ account, plans, onChanged }) {
@@ -23,7 +23,7 @@ function PlanSelect({ account, plans, onChanged }) {
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/api/v1/admin/accounts/${account.id}/plan`, { plan_id: planId })
+      await api.put(`/api/v1/admin/accounts/owner/${account.owner.id}/plan`, { plan_id: planId })
       onChanged()
     } catch (err) {
       setError(err.message)
@@ -56,16 +56,22 @@ function AddCreditsButton({ account, onChanged }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  const firstBusinessId = account.businesses?.[0]?.id
+
   async function submit() {
     const n = Number(amount)
     if (!Number.isFinite(n) || n <= 0) {
       setError('Montant invalide')
       return
     }
+    if (!firstBusinessId) {
+      setError('Aucune entreprise sur ce compte')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      await api.post(`/api/v1/credits/add?business_id=${account.id}`, {
+      await api.post(`/api/v1/credits/add?business_id=${firstBusinessId}`, {
         amount: n,
         action_type: 'admin_grant',
         source: 'bonus',
@@ -86,7 +92,7 @@ function AddCreditsButton({ account, onChanged }) {
         onClick={() => setOpen(true)}
         className="text-[#7C5CFC] text-sm underline"
       >
-        + Crédits
+        + Crédits au compte
       </button>
     )
   }
@@ -108,6 +114,70 @@ function AddCreditsButton({ account, onChanged }) {
         Annuler
       </button>
       {error && <span className="text-red-600 text-xs">{error}</span>}
+    </div>
+  )
+}
+
+function AccountCard({ account, plans, onChanged }) {
+  const [expanded, setExpanded] = useState(false)
+  const businesses = account.businesses || []
+
+  return (
+    <div className="border rounded-lg bg-white">
+      <div className="px-3 py-3 flex flex-wrap items-center gap-4">
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex items-center gap-2 min-w-[220px] text-left"
+        >
+          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <div>
+            <p className="font-medium">{ownerLabel(account.owner)}</p>
+            <p className="text-xs text-gray-500">{businesses.length} entreprise{businesses.length > 1 ? 's' : ''}</p>
+          </div>
+        </button>
+
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500">Plan</span>
+          <PlanSelect account={account} plans={plans} onChanged={onChanged} />
+        </div>
+
+        <div>
+          <span className="text-xs text-gray-500 block">Crédits du compte</span>
+          <span className="text-sm font-medium">{account.credit_balance}</span>
+        </div>
+
+        <div className="ml-auto">
+          <AddCreditsButton account={account} onChanged={onChanged} />
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t bg-gray-50">
+          <table className="w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr>
+                <th className="px-3 py-2 font-normal">Entreprise</th>
+                <th className="px-3 py-2 font-normal">Localisation</th>
+                <th className="px-3 py-2 font-normal">Créé le</th>
+              </tr>
+            </thead>
+            <tbody>
+              {businesses.map(b => (
+                <tr key={b.id} className="border-t border-gray-200">
+                  <td className="px-3 py-2">{b.name}</td>
+                  <td className="px-3 py-2">{b.locations?.length ? b.locations.join(', ') : '—'}</td>
+                  <td className="px-3 py-2">{formatDate(b.created_at)}</td>
+                </tr>
+              ))}
+              {businesses.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-3 py-3 text-center text-gray-500">Aucune entreprise.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
@@ -157,42 +227,13 @@ export default function AdminAccountsPage() {
       {!accounts && !error && <p>Chargement...</p>}
 
       {accounts && (
-        <div className="overflow-x-auto border rounded-lg">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left">
-              <tr>
-                <th className="px-3 py-2">Entreprise</th>
-                <th className="px-3 py-2">Propriétaire</th>
-                <th className="px-3 py-2">Plan</th>
-                <th className="px-3 py-2">Crédits</th>
-                <th className="px-3 py-2">Localisations</th>
-                <th className="px-3 py-2">Créé le</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map(a => (
-                <tr key={a.id} className="border-t">
-                  <td className="px-3 py-2 font-medium">{a.name}</td>
-                  <td className="px-3 py-2">{ownerLabel(a.owner)}</td>
-                  <td className="px-3 py-2">
-                    <PlanSelect account={a} plans={plans} onChanged={() => load(q)} />
-                  </td>
-                  <td className="px-3 py-2">{a.credit_balance}</td>
-                  <td className="px-3 py-2">{a.locations_count}</td>
-                  <td className="px-3 py-2">{formatDate(a.created_at)}</td>
-                  <td className="px-3 py-2">
-                    <AddCreditsButton account={a} onChanged={() => load(q)} />
-                  </td>
-                </tr>
-              ))}
-              {accounts.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-4 text-center text-gray-500">Aucun compte trouvé.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {accounts.map(a => (
+            <AccountCard key={a.owner?.id} account={a} plans={plans} onChanged={() => load(q)} />
+          ))}
+          {accounts.length === 0 && (
+            <p className="px-3 py-4 text-center text-gray-500 border rounded-lg bg-white">Aucun compte trouvé.</p>
+          )}
         </div>
       )}
     </div>

@@ -24,6 +24,7 @@ import AdminPlansPage from './pages/AdminPlansPage'
 import AdminAccountsPage from './pages/AdminAccountsPage'
 import AdminModulesPage from './pages/AdminModulesPage'
 import AdminSchedulePage from './pages/AdminSchedulePage'
+import AdminCreditsPage from './pages/AdminCreditsPage'
 import AccountPage from './pages/AccountPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
@@ -83,6 +84,7 @@ export default function App() {
       <Route path="/admin/accounts"          element={<PrivateRoute requireRole="superadmin"><AdminAccountsPage /></PrivateRoute>} />
       <Route path="/admin/modules"           element={<PrivateRoute requireRole="superadmin"><AdminModulesPage /></PrivateRoute>} />
       <Route path="/admin/schedule"          element={<PrivateRoute requireRole="superadmin"><AdminSchedulePage /></PrivateRoute>} />
+      <Route path="/admin/credits"           element={<PrivateRoute requireRole="superadmin"><AdminCreditsPage /></PrivateRoute>} />
       <Route path="/"                element={<Navigate to="/dashboard" replace />} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>

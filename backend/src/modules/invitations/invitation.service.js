@@ -3,9 +3,11 @@ const Business = require('../../models/Business')
 const Location = require('../../models/Location')
 const Invitation = require('../../models/Invitation')
 const Credit = require('../../models/Credit')
+const User = require('../../models/User')
 const { assertAccess } = require('../businesses/business.service')
 const { decrypt } = require('../../config/encryption')
 const { sendInvitationEmail } = require('../../services/mail.service')
+const { getCost } = require('../../services/credit-costs')
 
 async function send({ customerId, channel, locationId, businessId, userId }) {
   const business = await Business.findByPk(businessId)
@@ -18,7 +20,9 @@ async function send({ customerId, channel, locationId, businessId, userId }) {
   const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
   if (!location) throw { status: 404, message: 'Localisation introuvable' }
 
-  if (business.credit_balance <= 0) {
+  const cost = await getCost('invitation_email')
+  const owner = await User.findByPk(business.owner_id)
+  if (!owner || owner.credit_balance < cost) {
     throw { status: 402, message: 'Crédits insuffisants — rechargez votre compte pour envoyer des invitations' }
   }
 
@@ -55,8 +59,8 @@ async function send({ customerId, channel, locationId, businessId, userId }) {
     sent_at: new Date(),
   })
 
-  await business.decrement('credit_balance', { by: 1 })
-  await Credit.create({ business_id: businessId, amount: -1, action_type: 'invitation', source: 'plan' })
+  await User.decrement('credit_balance', { by: cost, where: { id: business.owner_id } })
+  await Credit.create({ business_id: businessId, amount: -cost, action_type: 'invitation', source: 'plan' })
   await customer.update({ status: 'invited' })
 
   return invitation

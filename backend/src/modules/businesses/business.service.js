@@ -2,19 +2,14 @@ const { Op } = require('sequelize')
 const Business = require('../../models/Business')
 const TeamMember = require('../../models/TeamMember')
 const Location = require('../../models/Location')
-const Plan = require('../../models/Plan')
 const { grantWelcomeCredits } = require('../credits/credits.service')
+const { getPlanForOwnerId } = require('../../services/plan-resolver')
 
-// Plafond du nombre d'entreprises qu'un propriétaire peut créer. Prend le plafond le plus
-// permissif entre le plan Gratuit (base par défaut) et les plans des entreprises déjà possédées
-// (si l'une d'elles est illimitée — max_businesses NULL — l'ensemble reste illimité).
-async function effectiveMaxBusinesses(userId, ownedBusinesses) {
-  const planIds = [...new Set(ownedBusinesses.map(b => b.plan_id).filter(Boolean))]
-  const plans = planIds.length ? await Plan.findAll({ where: { id: { [Op.in]: planIds } } }) : []
-  const gratuit = await Plan.findOne({ where: { name: 'Gratuit' } })
-  const limits = [gratuit?.max_businesses, ...plans.map(p => p.max_businesses)]
-  if (limits.some(l => l === null || l === undefined)) return null
-  return Math.max(...limits)
+// Plafond du nombre d'entreprises qu'un propriétaire peut créer : celui du plan de l'owner
+// (ou du plan Gratuit en repli si pas de plan actif). NULL = illimité.
+async function effectiveMaxBusinesses(userId) {
+  const plan = await getPlanForOwnerId(userId)
+  return plan?.max_businesses ?? null
 }
 
 function slugify(str) {
@@ -38,7 +33,7 @@ async function uniqueSlug(name) {
 
 async function create({ name, website_url, country, timezone }, userId) {
   const owned = await Business.findAll({ where: { owner_id: userId } })
-  const limit = await effectiveMaxBusinesses(userId, owned)
+  const limit = await effectiveMaxBusinesses(userId)
   if (limit !== null && owned.length >= limit) {
     throw { status: 403, message: `Limite de ${limit} entreprise(s) atteinte pour votre plan` }
   }
@@ -65,7 +60,18 @@ async function listForUser(userId) {
     ? await Business.findAll({ where: { id: { [Op.in]: memberIds }, owner_id: { [Op.ne]: userId } } })
     : []
 
-  return [...owned, ...memberBusinesses]
+  const roleByBusinessId = new Map(memberships.map(m => [m.business_id, m.role]))
+
+  return [
+    ...owned.map(b => attachRole(b, 'owner')),
+    ...memberBusinesses.map(b => attachRole(b, roleByBusinessId.get(b.id))),
+  ]
+}
+
+function attachRole(business, my_role) {
+  const json = business.toJSON()
+  json.my_role = my_role
+  return json
 }
 
 async function getOne(businessId, userId) {
