@@ -23,6 +23,13 @@ function buildEmbedCode(widgetId) {
   return `<div id="locagain-widget-${widgetId}"></div>\n<script src="${APP_URL()}/api/v1/widgets/${widgetId}/embed.js" async></script>`
 }
 
+// embed_code est DÉRIVÉ de l'APP_URL courante, recalculé à chaque lecture (jamais la valeur figée
+// en base). Évite les URLs périmées (ex. widgets créés en dev puis importés en prod via un dump).
+function withEmbedCode(widget) {
+  if (widget) widget.embed_code = buildEmbedCode(widget.id)
+  return widget
+}
+
 function googleReviewUrl(placeId) {
   return `https://search.google.com/local/writereview?placeid=${placeId}`
 }
@@ -122,7 +129,7 @@ async function create(businessId, userId, { name, type = 'carousel', locationId,
 
   widget.embed_code = buildEmbedCode(widget.id)
   await widget.save()
-  return widget
+  return withEmbedCode(widget)
 }
 
 async function list(businessId, userId, locationId) {
@@ -134,7 +141,9 @@ async function list(businessId, userId, locationId) {
   if (locationId) {
     where[Op.or] = [{ location_id: locationId }, { location_id: null }]
   }
-  return Widget.findAll({ where, order: [['created_at', 'DESC']] })
+  const widgets = await Widget.findAll({ where, order: [['created_at', 'DESC']] })
+  widgets.forEach(withEmbedCode)
+  return widgets
 }
 
 async function getOne(id, businessId, userId) {
@@ -145,7 +154,7 @@ async function getOne(id, businessId, userId) {
 
   const widget = await Widget.findOne({ where: { id, business_id: businessId } })
   if (!widget) throw { status: 404, message: 'Widget introuvable' }
-  return widget
+  return withEmbedCode(widget)
 }
 
 async function update(id, businessId, userId, fields) {
@@ -169,7 +178,7 @@ async function update(id, businessId, userId, fields) {
   }
 
   await widget.save()
-  return widget
+  return withEmbedCode(widget)
 }
 
 async function remove(id, businessId, userId) {
