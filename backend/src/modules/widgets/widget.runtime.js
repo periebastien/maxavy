@@ -102,11 +102,18 @@ function LOCAGAIN_RUNTIME() {
     ;(root.host ? root : document.head).appendChild(l)
   }
 
+  function avatarEl(nm, img, borderColor) {
+    if (img) {
+      return '<img class="lcg-av lcg-av-img" src="' + esc(img) + '" alt="' + esc(nm || '') + '"'
+        + ' loading="lazy" referrerpolicy="no-referrer" data-fb="' + esc(initial(nm)) + '" data-c="' + esc(hashColor(nm)) + '"'
+        + ' style="border-color:' + borderColor + '">'
+    }
+    return '<span class="lcg-av" style="background:' + hashColor(nm) + ';border-color:' + borderColor + '">' + esc(initial(nm)) + '</span>'
+  }
   function avatars(reviews, n, bg) {
     var k = Math.min(n, reviews.length), out = ''
     for (var i = 0; i < k; i++) {
-      var nm = reviews[i].author_name
-      out += '<span class="lcg-av" style="background:' + hashColor(nm) + ';border-color:' + bg + '">' + esc(initial(nm)) + '</span>'
+      out += avatarEl(reviews[i].author_name, reviews[i].author_image_url, bg)
     }
     return '<span class="lcg-avs">' + out + '</span>'
   }
@@ -118,6 +125,7 @@ function LOCAGAIN_RUNTIME() {
       + '.lcg-root *{box-sizing:border-box}'
       + '.lcg-stars{display:inline-flex;gap:1px;vertical-align:middle}'
       + '.lcg-av{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;color:#fff;font-size:13px;font-weight:500;border:2px solid ' + pal.bg + '}'
+      + '.lcg-av-img{object-fit:cover;background:#eaeaea;color:transparent}'
       + '.lcg-avs{display:inline-flex}.lcg-avs .lcg-av+.lcg-av{margin-left:-10px}'
       + '.lcg-link{color:inherit;text-decoration:none}'
       + '.lcg-pb{margin-top:8px;font-size:11px;color:' + pal.muted + ';text-align:center}'
@@ -171,7 +179,7 @@ function LOCAGAIN_RUNTIME() {
   function reviewCard(r, cfg, pal) {
     var c = cfg.common, cw = cfg.carousel
     var head = ''
-    if (cw.showAvatar) head += '<span class="lcg-av" style="background:' + hashColor(r.author_name) + ';border-color:' + pal.bg + '">' + esc(initial(r.author_name)) + '</span>'
+    if (cw.showAvatar) head += avatarEl(r.author_name, r.author_image_url, pal.bg)
     var idblock = ''
     if (cw.showAuthorName) idblock += '<p class="lcg-rc-name">' + esc(r.author_name || (c.lang === 'en' ? 'Google user' : 'Utilisateur Google')) + '</p>'
     var ds = cw.showDate ? dateStr(r.published_at, cfg) : ''
@@ -317,6 +325,19 @@ function LOCAGAIN_RUNTIME() {
     var part = payload.type === 'badge' ? badgeHtml(payload, pal, pbHtml) : carouselHtml(payload, pal)
     var outerPb = payload.type === 'badge' ? '' : pbHtml
     root.innerHTML = '<style>' + baseCss(pal, cfg) + part.css + '</style><div class="lcg-root">' + part.html + outerPb + '</div>'
+    if (!root.__lcgAvBound) {
+      root.__lcgAvBound = true
+      root.addEventListener('error', function (e) {
+        var t = e.target
+        if (!t || !t.classList || !t.classList.contains('lcg-av-img')) return
+        var span = document.createElement('span')
+        span.className = 'lcg-av'
+        span.style.background = t.getAttribute('data-c') || '#888'
+        span.style.borderColor = t.style.borderColor
+        span.textContent = t.getAttribute('data-fb') || ''
+        t.replaceWith(span)
+      }, true)
+    }
     if (payload.type === 'carousel' && payload.style === 'slider') initSlider(root, cfg)
     if (payload.type === 'carousel') bindReadMore(root)
   }

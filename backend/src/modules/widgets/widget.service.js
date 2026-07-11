@@ -68,12 +68,13 @@ async function buildPayload({ businessId, locationId, tagId, type, rawConfig }) 
     where,
     order,
     limit,
-    attributes: ['id', 'author_name', 'rating', 'text', 'published_at'],
+    attributes: ['id', 'author_name', 'author_image_url', 'rating', 'text', 'published_at'],
   })
   // Whitelist explicite (jamais l'instance modèle brute) : seuls ces 5 champs sortent vers les sites tiers.
   const reviews = rows.map(r => ({
     id: r.id,
     author_name: r.author_name,
+    author_image_url: r.author_image_url,
     rating: r.rating,
     text: r.text,
     published_at: r.published_at,
