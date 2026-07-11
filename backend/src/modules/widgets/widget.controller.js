@@ -61,6 +61,7 @@ async function preview(req, res) {
 async function getPublic(req, res) {
   try {
     const data = await service.getPublic(req.params.id)
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin')
     res.set('Cache-Control', 'public, max-age=120')
     res.json(data)
   } catch (err) {
@@ -70,6 +71,7 @@ async function getPublic(req, res) {
 
 function getRuntimeJs(req, res) {
   res.type('application/javascript')
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin')
   res.set('Cache-Control', 'public, max-age=300')
   res.send(runtimeSource())
 }
@@ -77,6 +79,7 @@ function getRuntimeJs(req, res) {
 function getEmbedJs(req, res) {
   if (!UUID_RE.test(req.params.id)) return res.status(404).type('application/javascript').send('// widget introuvable')
   res.type('application/javascript')
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin')
   res.set('Cache-Control', 'public, max-age=300')
   res.send(embedSource(req.params.id, apiBase(req)))
 }
