@@ -103,6 +103,8 @@ Mise à jour : 2026-07-11.
 - Si l'écran contredit la base : backend probablement désynchronisé (nodemon pas rechargé) → redémarrer le backend avant de chercher un bug.
 - Carte Google Maps et événements internes Recharts ne se testent pas en preview headless — pas un bug, vérifier en vrai navigateur.
 - Charte de couleurs de rang partagée : `frontend/src/lib/rank-palette.js` (source unique, ré-exportée par `lib/geogrid.js`).
+- **Widgets embarqués (embed sur sites clients)** : les routes publiques (`/:id/embed.js`, `/runtime.js`, `/:id/public`) DOIVENT renvoyer `Cross-Origin-Resource-Policy: cross-origin` — helmet met `same-origin` par défaut, ce qui bloque le chargement des scripts depuis un autre domaine (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, widget invisible sans erreur console). Corrigé dans `widget.controller.js`.
+- **`widgets.embed_code`** est **dérivé** de `APP_URL` **à la lecture** (jamais figé en base) — sinon un widget créé en dev puis importé en prod (dump) garde une URL `localhost`. Voir `withEmbedCode()` dans `widget.service.js`.
 
 ## Fin de session — checklist obligatoire
 À chaque fin de session :
