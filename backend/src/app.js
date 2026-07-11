@@ -83,7 +83,12 @@ async function startCronsIfPrimary() {
 sequelize.authenticate()
   .then(async () => {
     console.log('PostgreSQL connecté')
-    await startCronsIfPrimary()
+    // L'échec du verrou cron ne doit jamais empêcher le serveur de démarrer.
+    try {
+      await startCronsIfPrimary()
+    } catch (e) {
+      console.error('[cron] échec acquisition du verrou (jobs non démarrés) :', e.message)
+    }
     app.listen(PORT, () => console.log(`Backend GMB Manager démarré sur le port ${PORT}`))
   })
   .catch(err => {
