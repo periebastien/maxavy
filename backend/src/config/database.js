@@ -14,7 +14,9 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     idle: 10000,
   },
   dialectOptions: {
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    // SSL piloté par DB_SSL (et non plus par NODE_ENV) : une base PostgreSQL locale au
+    // serveur n'a généralement pas de SSL. Mettre DB_SSL=true pour une base managée distante.
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
   }
 })
 
