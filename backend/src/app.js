@@ -13,7 +13,12 @@ const app = express()
 
 // CSP désactivée : le backend sert aussi le SPA React (Google Maps/OAuth chargés depuis des
 // domaines tiers) ; la CSP par défaut de helmet casserait la page. À durcir plus tard.
-app.use(helmet({ contentSecurityPolicy: false }))
+// COOP en 'same-origin-allow-popups' : le COOP 'same-origin' par défaut coupe window.opener
+// avec la popup Google Sign-In → « Cannot read properties of null (reading 'postMessage') ».
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}))
 app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://gmbmanager.ai' : 'http://localhost:5173' }))
 
 // Webhook Stripe : body brut obligatoire pour la vérification de signature HMAC.
