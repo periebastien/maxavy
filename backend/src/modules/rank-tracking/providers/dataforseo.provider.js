@@ -113,12 +113,22 @@ async function getReadyTaskIds() {
   return items.map(it => ({ taskId: it.id, tag: it.tag }))
 }
 
-// Résultat d'une tâche prête. Retourne null si pas encore disponible (ne devrait pas arriver si on a
-// filtré via getReadyTaskIds() avant, mais reste défensif). GET idempotent → retry court sur blip transport.
+// Statuts « en attente » : tâche pas encore traitée côté DataForSEO. À distinguer des statuts terminaux
+// (20000 succès, ou tout autre code = échec définitif type 40102 "No Search Results") — confondre les deux
+// bloque le scan indéfiniment (fetched_at jamais posé, statut `running` à vie) et expose à une re-facturation
+// si l'appelant retente une tâche déjà traitée côté DataForSEO.
+const PENDING_STATUS_CODES = new Set([20100, 40601, 40602])
+
+// Résultat d'une tâche prête. Retourne null si pas encore disponible (en attente de traitement).
+// Pour un statut terminal sans résultat exploitable (ex. 40102 No Search Results), retourne { items: [] }
+// afin que le point soit résolu avec rank null (non classé) plutôt que de rester bloqué. GET idempotent →
+// retry court sur blip transport.
 async function getTaskResult(taskId) {
   const data = await request(`/task_get/advanced/${taskId}`, { retries: 2 })
   const task = data.tasks?.[0]
-  if (!task || task.status_code !== 20000) return null
+  if (!task) return null
+  if (PENDING_STATUS_CODES.has(task.status_code)) return null
+  if (task.status_code !== 20000) return { items: [] }
   const result = task.result?.[0]
   if (!result) return null
   return {
