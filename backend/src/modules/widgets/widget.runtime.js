@@ -166,6 +166,12 @@ function LOCAGAIN_RUNTIME() {
       + '.lcg-wrap{display:flex;justify-content:' + justify + ';padding:' + cpad + 'px}'
       + '.lcg-wrap-inner{display:flex;flex-direction:column;align-items:center}'
       + '.lcg-cta{margin-top:6px;font-size:13px;font-weight:500;color:' + pal.muted + ';text-decoration:underline;text-align:center}'
+      + '@media(max-width:480px){'
+      + '.lcg-bc{gap:8px;padding:6px 12px}'
+      + '.lcg-bc-txt{font-size:14px}'
+      + '.lcg-avs .lcg-av:nth-child(n+4){display:none}'
+      + '.lcg-sep{margin:0 6px}'
+      + '}'
     var body = payload.style === 'framed'
       ? inner
       : '<span class="lcg-bc">' + inner + '</span>'

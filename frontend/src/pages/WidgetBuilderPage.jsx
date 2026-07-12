@@ -48,26 +48,39 @@ function Accordion({ id, title, openSet, toggle, children }) {
   )
 }
 
-function ColorField({ value, onChange, allowAuto, allowTransparent, transparentLabel }) {
-  const isHex = /^#[0-9a-fA-F]{3,8}$/.test(value)
+function ColorField({ value, onChange, allowAuto, allowTransparent, allowOpacity, transparentLabel }) {
+  const m = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(value || '')
+  const rgb = m ? '#' + m[1] : '#ffffff'
+  const alpha = m && m[2] ? Math.round((parseInt(m[2], 16) / 255) * 100) : 100
+  const combine = (hex6, pct) => pct >= 100 ? hex6 : hex6 + Math.round((pct / 100) * 255).toString(16).padStart(2, '0')
   return (
     <div className="flex items-center gap-1.5">
       {allowAuto && <Chip active={value === 'auto'} onClick={() => onChange('auto')}>Auto</Chip>}
       {allowTransparent && <Chip active={value === 'transparent'} onClick={() => onChange('transparent')}>{transparentLabel || 'Transp.'}</Chip>}
       <input
         type="color"
-        value={isHex ? value : '#ffffff'}
-        onChange={e => onChange(e.target.value)}
+        value={rgb}
+        onChange={e => onChange(combine(e.target.value, alpha))}
         className="w-7 h-7 rounded border border-border cursor-pointer p-0 bg-white shrink-0"
         title="Couleur personnalisée"
       />
+      {allowOpacity && m && (
+        <label className="flex items-center gap-1 text-xs text-text-tertiary" title="Opacité">
+          <input
+            type="range" min="0" max="100" step="5" value={alpha}
+            onChange={e => onChange(combine(rgb, parseInt(e.target.value, 10)))}
+            className="w-16 cursor-pointer"
+          />
+          <span className="tabular-nums w-8 text-right">{alpha}%</span>
+        </label>
+      )}
     </div>
   )
 }
 
 function FieldControl({ field, value, onChange }) {
   if (field.type === 'bool') return <Toggle checked={!!value} onChange={onChange} />
-  if (field.type === 'color') return <ColorField value={value} onChange={onChange} allowAuto={field.allowAuto} allowTransparent={field.allowTransparent} transparentLabel={field.transparentLabel} />
+  if (field.type === 'color') return <ColorField value={value} onChange={onChange} allowAuto={field.allowAuto} allowTransparent={field.allowTransparent} allowOpacity={field.allowOpacity} transparentLabel={field.transparentLabel} />
   if (field.type === 'enum') {
     return (
       <select
@@ -155,6 +168,7 @@ export default function WidgetBuilderPage() {
   const [payload, setPayload] = useState(null)
   const [loading, setLoading] = useState(editing)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState(null)
   const [openSections, setOpenSections] = useState(() => new Set(['source']))
@@ -230,6 +244,8 @@ export default function WidgetBuilderPage() {
       if (editing) {
         const w = await api.patch(`/api/v1/widgets/${id}?business_id=${bid}`, { name, location_id: locationId || null, tag_id: tagId || null, config })
         setEmbedCode(w.embed_code || '')
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2500)
       } else {
         const w = await api.post(`/api/v1/widgets?business_id=${bid}`, { name, type, locationId: locationId || null, tagId: tagId || null, config })
         navigate(`/widgets/${w.id}`, { replace: true })
@@ -340,10 +356,17 @@ export default function WidgetBuilderPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-text-secondary">Aperçu en direct</p>
-              <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 bg-accent text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                {editing ? 'Enregistrer' : 'Créer le widget'}
-              </button>
+              <div className="flex items-center gap-2">
+                {saved && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                    <Check size={14} /> Enregistré
+                  </span>
+                )}
+                <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 bg-accent text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50">
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {editing ? 'Enregistrer' : 'Créer le widget'}
+                </button>
+              </div>
             </div>
 
             <PreviewFrame payload={payload} />
