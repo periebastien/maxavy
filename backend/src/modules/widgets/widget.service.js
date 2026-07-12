@@ -31,7 +31,7 @@ function withEmbedCode(widget) {
 }
 
 function googleReviewUrl(placeId) {
-  return `https://search.google.com/local/writereview?placeid=${placeId}`
+  return `https://search.google.com/local/reviews?placeid=${placeId}`
 }
 
 async function isFreePlan(business) {
