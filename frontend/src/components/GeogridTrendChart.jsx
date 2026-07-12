@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Label } from 'recharts'
 import { Loader2 } from 'lucide-react'
 import { RANGE_PRESETS, GRANULARITIES, AGG_MODES } from '../lib/geogrid-trend'
 
@@ -32,7 +32,9 @@ export function TrendControls({ rangePreset, setRangePreset, granularity, setGra
 // nom affiché (franchises) sans jamais partager le même `key`.
 // onDayClick(payload) : appelé au clic sur un point du graphe ; payload = ligne cliquée (contient .key et
 // .label du bucket) → la page mappe .key vers un rapport pour piloter la carte. height : hauteur en px.
-export function TrendChart({ data, lines, yReversed = true, yLabel = 'Position', height = 320, onDayClick }) {
+// markers : [{ key, label }] — ruptures de géométrie de grille (§S2). Seuls les markers dont la key existe
+// dans `data` sont rendus (une rupture peut tomber hors de la plage temporelle affichée).
+export function TrendChart({ data, lines, yReversed = true, yLabel = 'Position', height = 320, onDayClick, markers }) {
   if (!data.length) return <p className="text-sm text-text-tertiary text-center py-10">Pas encore assez de données pour tracer une courbe.</p>
   const handleClick = onDayClick
     ? e => { const p = e?.activePayload?.[0]?.payload; if (p) onDayClick(p) }
@@ -47,6 +49,15 @@ export function TrendChart({ data, lines, yReversed = true, yLabel = 'Position',
           label={{ value: yLabel, angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B6B78' } }} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 12 }} />
+        {(markers || []).map(m => {
+          const row = data.find(d => d.key === m.key)
+          if (!row) return null
+          return (
+            <ReferenceLine key={m.key} x={row.label} stroke="#9B9BA8" strokeDasharray="4 4">
+              <Label value={m.label} position="top" style={{ fontSize: 11, fill: '#6B6B78' }} />
+            </ReferenceLine>
+          )
+        })}
         {lines.map(l => (
           <Line key={l.key} type="monotone" dataKey={l.key} name={l.label || l.key} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
         ))}

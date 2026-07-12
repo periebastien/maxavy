@@ -10,6 +10,7 @@ const GeogridPoint = require('../../models/GeogridPoint')
 const GeogridKeyword = require('../../models/GeogridKeyword')
 const GeogridConfig = require('../../models/GeogridConfig')
 const { ensureAccess, getQuota } = require('./rank-tracking.service')
+const trendCompat = require('./trend-compat')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const NOT_RANKED = 21 // même convention que l'ATRP de la fiche (scan.service.js) — hors profondeur mesurée
@@ -222,6 +223,10 @@ async function detected(businessId, userId, configId) {
 // scans (mêmes dates) que getTrend() (scan.service.js), pour que les deux se bucketisent/fusionnent
 // ensemble côté front sans réconciliation de dates. avg_position à null pour un scan où le concurrent
 // n'a pas encore de ligne (ex. ajouté après coup, recompute pas encore lancé) — Recharts saute le point.
+// S1 (continuité "zone commune") : si la grille a changé en cours de route, ajoute `avg_position_comparable`
+// par point de série — moyenne du concurrent restreinte à l'intersection géométrique commune des scans
+// (même principe que getTrend, scan.service.js). Le JSONB `competitors` des points n'est chargé QUE dans
+// ce chemin (lourd) — jamais dans le cas nominal (une seule signature géométrique).
 async function trend(businessId, userId, keywordId) {
   await ensureAccess(businessId, userId)
   if (!UUID_RE.test(keywordId || '')) throw { status: 404, message: 'Mot-clé introuvable' }
@@ -234,7 +239,7 @@ async function trend(businessId, userId, keywordId) {
 
   const scans = await GeogridScan.findAll({
     where: { keyword_id: keywordId, status: 'done' },
-    attributes: ['id', 'scanned_at'],
+    attributes: ['id', 'scanned_at', 'grid_size', 'grid_spacing_m', 'center_lat', 'center_lng', 'shape'],
     order: [['scanned_at', 'ASC']],
   })
   if (!scans.length) return competitors.map(c => ({ place_id: c.place_id, name: c.name, series: [] }))
@@ -246,12 +251,27 @@ async function trend(businessId, userId, keywordId) {
   const byPlaceId = new Map(competitors.map(c => [c.place_id, new Map()]))
   for (const r of rows) byPlaceId.get(r.place_id)?.set(r.scan_id, Number(r.avg_position))
 
+  let pointsByScan = null
+  let commonKeys = null
+  if (scans.length >= 2 && trendCompat.hasMixedGeometries(scans)) {
+    const points = await GeogridPoint.findAll({
+      where: { scan_id: { [Op.in]: scans.map(s => s.id) } },
+      attributes: ['scan_id', 'lat', 'lng', 'competitors'],
+    })
+    pointsByScan = trendCompat.groupPointsByScan(points)
+    commonKeys = trendCompat.intersectPointKeys(pointsByScan)
+    if (commonKeys.size < trendCompat.MIN_COMMON_POINTS) commonKeys = null
+  }
+
   return competitors.map(c => ({
     place_id: c.place_id,
     name: c.name,
     series: scans.map(s => ({
       scanned_at: s.scanned_at,
       avg_position: byPlaceId.get(c.place_id).has(s.id) ? byPlaceId.get(c.place_id).get(s.id) : null,
+      avg_position_comparable: commonKeys
+        ? trendCompat.computeComparableCompetitorAvg(pointsByScan.get(s.id) || [], commonKeys, c.place_id)
+        : null,
     })),
   }))
 }

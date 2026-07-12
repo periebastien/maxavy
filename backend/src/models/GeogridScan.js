@@ -30,6 +30,7 @@ const GeogridScan = sequelize.define('GeogridScan', {
   attempts:               { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 }, // reprises consommées (résilience cron)
   next_attempt_at:        { type: DataTypes.DATE }, // quand retenter (null = aucune reprise programmée)
   retry_reason:           { type: DataTypes.STRING }, // 'transport' (re-submit sûr) | 'partial' (re-poll gratuit)
+  shape:                  { type: DataTypes.STRING }, // snapshot de la forme de grille au moment du scan ; null = scan antérieur à la colonne
 }, {
   tableName: 'geogrid_scans',
   underscored: true,

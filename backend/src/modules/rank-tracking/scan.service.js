@@ -19,6 +19,7 @@ const rtConfig = require('./rank-tracking.config') // nommé rtConfig : `cfg` es
 const provider = require('./providers')
 const { ensureAccess, getQuota, ensureConfigForLocation } = require('./rank-tracking.service')
 const competitorService = require('./competitor.service')
+const trendCompat = require('./trend-compat')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const RANK_PROVIDER_NAME = process.env.RANK_PROVIDER || 'dataforseo'
@@ -113,6 +114,7 @@ async function submitScanForKeyword(keyword, { runId, trigger = 'manual' } = {})
     grid_spacing_m: config.grid_spacing_m,
     center_lat: centerLat,
     center_lng: centerLng,
+    shape: config.shape,
     status: 'pending',
     provider: RANK_PROVIDER_NAME,
     points_total: pointSpecs.length,
@@ -497,15 +499,42 @@ async function getRunAverageMap(runId, businessId, userId) {
 
 // Série temporelle brute d'un mot-clé (scans terminés, triés par date) — alimente les courbes G9.
 // Pas d'agrégation jour/semaine/mois ici : c'est la couche de visualisation (frontend) qui bucketise.
+// S1 (continuité "zone commune") : si la grille a changé en cours de route (taille/espacement/centre/
+// forme), les métriques agrégées ajoutent des champs `*_comparable` calculés sur la seule intersection
+// géographique commune à tous les scans — le front peut alors afficher une courbe sans saut artificiel
+// (`atrp_comparable ?? atrp`). Aucun coût ajouté si la grille n'a jamais changé (cas nominal).
 async function getTrend(businessId, userId, keywordId) {
   await ensureAccess(businessId, userId)
   if (!UUID_RE.test(keywordId || '')) throw { status: 404, message: 'Mot-clé introuvable' }
   const keyword = await GeogridKeyword.findOne({ where: { id: keywordId, business_id: businessId } })
   if (!keyword) throw { status: 404, message: 'Mot-clé introuvable' }
-  return GeogridScan.findAll({
+  const scans = await GeogridScan.findAll({
     where: { keyword_id: keywordId, status: 'done' },
-    attributes: ['id', 'run_id', 'scanned_at', 'arp', 'atrp', 'solv', 'points_top3', 'points_top10', 'points_top20', 'points_total'],
+    attributes: [
+      'id', 'run_id', 'scanned_at', 'arp', 'atrp', 'solv', 'points_top3', 'points_top10', 'points_top20', 'points_total',
+      'grid_size', 'grid_spacing_m', 'center_lat', 'center_lng', 'shape',
+    ],
     order: [['scanned_at', 'ASC']],
+  })
+
+  if (scans.length < 2 || !trendCompat.hasMixedGeometries(scans)) {
+    return scans.map(s => s.toJSON())
+  }
+
+  const points = await GeogridPoint.findAll({
+    where: { scan_id: { [Op.in]: scans.map(s => s.id) } },
+    attributes: ['scan_id', 'lat', 'lng', 'rank'],
+  })
+  const pointsByScan = trendCompat.groupPointsByScan(points)
+  const commonKeys = trendCompat.intersectPointKeys(pointsByScan)
+
+  return scans.map(scan => {
+    const plain = scan.toJSON()
+    if (commonKeys.size < trendCompat.MIN_COMMON_POINTS) {
+      return { ...plain, atrp_comparable: null, arp_comparable: null, solv_comparable: null, points_comparable: null }
+    }
+    const comparable = trendCompat.computeComparableAggregates(pointsByScan.get(scan.id) || [], commonKeys)
+    return comparable ? { ...plain, ...comparable } : { ...plain, atrp_comparable: null, arp_comparable: null, solv_comparable: null, points_comparable: null }
   })
 }
 

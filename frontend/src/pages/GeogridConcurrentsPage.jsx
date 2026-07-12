@@ -5,6 +5,7 @@ import AppLayout from '../components/layout/AppLayout'
 import GeogridMap from '../components/GeogridMap'
 import CompetitorTable from '../components/GeogridCompetitorTable'
 import { TrendControls, TrendChart, LINE_COLORS } from '../components/GeogridTrendChart'
+import { detectGeometryBreaks } from '../lib/geogrid-geometry'
 import { RANK_LEGEND } from '../lib/geogrid'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
@@ -206,15 +207,18 @@ export default function GeogridConcurrentsPage() {
     ? competitorsTrend.filter(c => c.place_id === selectedCompetitorId)
     : competitorsTrend
   const seriesByLabel = {
-    'Ma fiche': bucketize(filterByRange(mineTrend.map(s => ({ date: s.scanned_at, value: s.atrp })), rangePreset), granularity, aggMode),
+    'Ma fiche': bucketize(filterByRange(mineTrend.map(s => ({ date: s.scanned_at, value: s.atrp_comparable ?? s.atrp })), rangePreset), granularity, aggMode),
   }
   activeCompetitorsTrend.forEach(c => {
     seriesByLabel[c.name || c.place_id] = bucketize(
-      filterByRange(c.series.map(s => ({ date: s.scanned_at, value: s.avg_position })), rangePreset), granularity, aggMode
+      filterByRange(c.series.map(s => ({ date: s.scanned_at, value: s.avg_position_comparable ?? s.avg_position })), rangePreset), granularity, aggMode
     )
   })
   const chartData = mergeSeriesForChart(seriesByLabel)
   const chartLines = Object.keys(seriesByLabel).map((label, i) => ({ key: label, color: LINE_COLORS[i % LINE_COLORS.length] }))
+
+  // Ruptures de géométrie — uniquement depuis le trend de la fiche (pas celui des concurrents, cf. consigne).
+  const geometryMarkers = detectGeometryBreaks(mineTrend, granularity, bucketKeyOf)
 
   // Clic-graphe → rapport (via ma courbe, qui porte run_id + scanned_at).
   const bucketToRun = new Map()
@@ -297,7 +301,7 @@ export default function GeogridConcurrentsPage() {
               granularity={granularity} setGranularity={setGranularity}
               aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
           </div>
-          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
+          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} markers={geometryMarkers} />
           <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
         </div>
 

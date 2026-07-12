@@ -6,6 +6,7 @@ import MetricCard from '../components/common/MetricCard'
 import GeogridMap from '../components/GeogridMap'
 import CompetitorTable from '../components/GeogridCompetitorTable'
 import { TrendControls, TrendChart, LINE_COLORS } from '../components/GeogridTrendChart'
+import { detectGeometryBreaks, isGeometryBreak } from '../lib/geogrid-geometry'
 import { RANK_LEGEND } from '../lib/geogrid'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
@@ -21,6 +22,12 @@ function round2(n) { return Math.round(n * 100) / 100 }
 function fmtNum(n) {
   const r = round2(n)
   return (Number.isInteger(r) ? r : r.toFixed(1)).toString().replace('.', ',')
+}
+
+// Tiret protecteur quand la géométrie a changé entre les deux scans comparés — la comparaison brute
+// n'aurait pas de sens (grille différente).
+function GeometryChangedDash() {
+  return <span className="text-text-tertiary text-xs" title="Grille modifiée — comparaison non significative">—</span>
 }
 
 // Flèche d'évolution vs le rapport précédent — atrp est un RANG (plus bas = mieux), donc une baisse du
@@ -223,11 +230,16 @@ export default function GeogridSuiviPage() {
   const seriesByLabel = {}
   const chartKeywords = isGlobal ? keywords : (selectedKeyword ? [selectedKeyword] : [])
   chartKeywords.forEach(kw => {
-    const raw = (trendByKeyword[kw.id] || []).map(s => ({ date: s.scanned_at, value: s.atrp }))
+    const raw = (trendByKeyword[kw.id] || []).map(s => ({ date: s.scanned_at, value: s.atrp_comparable ?? s.atrp }))
     seriesByLabel[kw.keyword] = bucketize(filterByRange(raw, rangePreset), granularity, aggMode)
   })
   const chartData = mergeSeriesForChart(seriesByLabel)
   const chartLines = chartKeywords.map((kw, i) => ({ key: kw.keyword, color: LINE_COLORS[i % LINE_COLORS.length] }))
+
+  // Marqueurs de rupture de géométrie — calculés sur l'ensemble des scans du mot-clé affiché (ou, en vue
+  // globale, sur le premier mot-clé disponible : la grille est partagée par toute la localisation).
+  const geometryScans = trendByKeyword[chartKeywords[0]?.id] || []
+  const geometryMarkers = detectGeometryBreaks(geometryScans, granularity, bucketKeyOf)
 
   // Mapping clic-graphe → rapport : clé de bucket (scanned_at) → run le plus récent de ce bucket.
   const bucketToRun = new Map()
@@ -296,7 +308,9 @@ export default function GeogridSuiviPage() {
                     <td className="px-3 py-3 text-text-secondary">{scan.points_top10 ?? '—'}</td>
                     <td className="px-3 py-3 text-text-secondary">{scan.points_top20 ?? '—'}</td>
                     <td className="px-3 py-3">
-                      <EvolutionArrow current={scan.atrp} previous={previousByKeyword.get(scan.keyword_id)?.atrp} />
+                      {isGeometryBreak(previousByKeyword.get(scan.keyword_id), scan)
+                        ? <GeometryChangedDash />
+                        : <EvolutionArrow current={scan.atrp} previous={previousByKeyword.get(scan.keyword_id)?.atrp} />}
                     </td>
                   </tr>
                 ))}
@@ -347,7 +361,7 @@ export default function GeogridSuiviPage() {
               granularity={granularity} setGranularity={setGranularity}
               aggMode={aggMode} setAggMode={setAggMode} loading={loadingTrend} />
           </div>
-          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} />
+          <TrendChart data={chartData} lines={chartLines} height={420} onDayClick={onDayClick} markers={geometryMarkers} />
           <p className="text-xs text-text-tertiary">Cliquez sur un point de la courbe pour afficher la carte de ce jour ci-dessous.</p>
         </div>
       </div>

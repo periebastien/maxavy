@@ -85,6 +85,8 @@ export default function GeogridConfigPage() {
   const [previewing, setPreviewing] = useState(false)
   const [fitToken, setFitToken] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [originalGrid, setOriginalGrid] = useState(null) // { shape, gridSize, spacing, centerLat, centerLng } tels que chargés depuis la config existante
+  const [pendingGridWarning, setPendingGridWarning] = useState(null) // message affiché avant confirmation (null = pas d'avertissement en cours)
 
   // Étape 2 — mots-clés
   const [keywords, setKeywords] = useState([])
@@ -141,6 +143,13 @@ export default function GeogridConfigPage() {
           setCenterCustom(custom)
           setCenter(custom ? { lat: Number(cfg.center_lat), lng: Number(cfg.center_lng) } : fiche)
           setFitToken(t => t + 1)
+          setOriginalGrid({
+            shape: cfg.shape || 'square',
+            gridSize: cfg.grid_size || 7,
+            spacing: cfg.grid_spacing_m || 500,
+            centerLat: custom ? Number(cfg.center_lat) : null,
+            centerLng: custom ? Number(cfg.center_lng) : null,
+          })
 
           setFrequency(cfg.frequency || 'weekly')
           setRunHour(Number.isInteger(cfg.run_hour) ? cfg.run_hour : 4)
@@ -205,6 +214,7 @@ export default function GeogridConfigPage() {
   const onCenterChange = useCallback((lat, lng) => {
     setCenter({ lat, lng })
     setCenterCustom(true)
+    setPendingGridWarning(null)
   }, [])
 
   function recenter() {
@@ -212,11 +222,27 @@ export default function GeogridConfigPage() {
     setCenter(fiche)
     setCenterCustom(false)
     setFitToken(t => t + 1)
+    setPendingGridWarning(null)
   }
-  function changeSize(n) { setGridSize(n); setFitToken(t => t + 1) }
-  function changeSpacing(m) { setSpacing(m); setFitToken(t => t + 1) }
+  function changeSize(n) { setGridSize(n); setFitToken(t => t + 1); setPendingGridWarning(null) }
+  function changeSpacing(m) { setSpacing(m); setFitToken(t => t + 1); setPendingGridWarning(null) }
 
-  async function saveGridAndNext() {
+  // Compare la géométrie en cours d'édition à celle chargée au départ — sert à choisir le message
+  // d'avertissement adapté (S5) avant d'écraser une config déjà utilisée par des rapports existants.
+  function gridChangeKind() {
+    if (!originalGrid) return null
+    const newCenterLat = centerCustom ? center.lat : null
+    const newCenterLng = centerCustom ? center.lng : null
+    const sizeChanged = gridSize !== originalGrid.gridSize
+    const spacingChanged = spacing !== originalGrid.spacing
+    const centerChanged = newCenterLat !== originalGrid.centerLat || newCenterLng !== originalGrid.centerLng
+    const shapeChanged = shape !== originalGrid.shape
+    if (!sizeChanged && !spacingChanged && !centerChanged && !shapeChanged) return null
+    if (sizeChanged && !spacingChanged && !centerChanged && !shapeChanged) return 'size-only'
+    return 'breaking'
+  }
+
+  async function persistGridAndNext() {
     setSaving(true); setError('')
     try {
       await api.put(`/api/v1/rank-tracking/config?business_id=${bid}&location_id=${locId}`, {
@@ -224,12 +250,24 @@ export default function GeogridConfigPage() {
         center_lat: centerCustom ? center.lat : null,
         center_lng: centerCustom ? center.lng : null,
       })
+      setPendingGridWarning(null)
       setStep(2)
     } catch (e) {
       setError(e.message)
     } finally {
       setSaving(false)
     }
+  }
+
+  function saveGridAndNext() {
+    const kind = hasCompletedRun ? gridChangeKind() : null
+    if (kind && !pendingGridWarning) {
+      setPendingGridWarning(kind === 'size-only'
+        ? "Les rapports existants restent consultables. Les courbes d'évolution seront comparées sur la zone commune aux deux grilles."
+        : "Ce changement crée une rupture de comparabilité : l'historique restera consultable, mais les évolutions repartiront de ce point.")
+      return
+    }
+    persistGridAndNext()
   }
 
   async function addKeyword(e) {
@@ -407,9 +445,9 @@ export default function GeogridConfigPage() {
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-2">Forme de la grille</label>
                 <div className="flex gap-2">
-                  <ShapeButton active={shape === 'square'} onClick={() => setShape('square')} icon={<Square size={15} />} label="Carré" />
+                  <ShapeButton active={shape === 'square'} onClick={() => { setShape('square'); setPendingGridWarning(null) }} icon={<Square size={15} />} label="Carré" />
                   {allowedShapes.includes('circle') && (
-                    <ShapeButton active={shape === 'circle'} onClick={() => setShape('circle')} icon={<Circle size={15} />} label="Cercle" />
+                    <ShapeButton active={shape === 'circle'} onClick={() => { setShape('circle'); setPendingGridWarning(null) }} icon={<Circle size={15} />} label="Cercle" />
                   )}
                 </div>
               </div>
@@ -434,6 +472,12 @@ export default function GeogridConfigPage() {
               </div>
             </div>
 
+            {pendingGridWarning && (
+              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
+                {pendingGridWarning}
+              </div>
+            )}
+
             {/* Recentrer · stats · bouton */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <button onClick={recenter} disabled={!fiche || !centerCustom}
@@ -448,7 +492,7 @@ export default function GeogridConfigPage() {
                 </span>
                 <Button onClick={saveGridAndNext} disabled={!fiche || saving || !pointCount}>
                   {saving ? <Loader2 size={15} className="animate-spin" /> : null}
-                  Enregistrer et continuer
+                  {pendingGridWarning ? "Confirmer l'enregistrement" : 'Enregistrer et continuer'}
                 </Button>
               </div>
             </div>
