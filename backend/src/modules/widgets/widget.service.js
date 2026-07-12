@@ -20,7 +20,7 @@ const SORT_MAP = {
 }
 
 function buildEmbedCode(widgetId) {
-  return `<div id="locagain-widget-${widgetId}"></div>\n<script src="${APP_URL()}/api/v1/widgets/${widgetId}/embed.js" async></script>`
+  return `<div id="gmbmanager.ai-widget-${widgetId}"></div>\n<script src="${APP_URL()}/api/v1/widgets/${widgetId}/embed.js" async></script>`
 }
 
 // embed_code est DÉRIVÉ de l'APP_URL courante, recalculé à chaque lecture (jamais la valeur figée

@@ -355,7 +355,7 @@ function LOCAGAIN_EMBED() {
   var cfg = window.__LCGW_CFG || {}
   var id = cfg.id, api = cfg.api
   if (!id || !api) return
-  var mount = document.getElementById('locagain-widget-' + id)
+  var mount = document.getElementById('gmbmanager.ai-widget-' + id) || document.getElementById('locagain-widget-' + id)
   if (!mount || mount.getAttribute('data-lcg-init')) return
   mount.setAttribute('data-lcg-init', '1')
   var root = mount.attachShadow ? mount.attachShadow({ mode: 'open' }) : mount
