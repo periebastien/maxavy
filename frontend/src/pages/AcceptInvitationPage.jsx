@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { GoogleLogin } from '@react-oauth/google'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
 import api from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 
 const ROLE_LABELS = { admin: 'Administrateur', editor: 'Éditeur', viewer: 'Lecteur' }
 
 export default function AcceptInvitationPage() {
+  const { loginWithGoogle } = useAuth()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
 
@@ -60,6 +63,26 @@ export default function AcceptInvitationPage() {
     }
   }
 
+  async function handleGoogleSuccess(credentialResponse) {
+    setError('')
+    setSubmitting(true)
+    try {
+      await loginWithGoogle(credentialResponse.credential)
+      const res = await api.post('/api/v1/team/accept', { token })
+      if (res.business_id) localStorage.setItem('active_business_id', res.business_id)
+      window.location.href = '/dashboard'
+    } catch (err) {
+      if (err.status === 403) {
+        setError(`Connectez-vous avec le compte Google correspondant à ${preview.email}`)
+      } else if (err.status === 409) {
+        setError('Un compte existe déjà pour cet email. Connectez-vous, puis rouvrez ce lien pour accepter.')
+      } else {
+        setError(err.message)
+      }
+      setSubmitting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-page flex items-center justify-center p-4">
@@ -94,6 +117,26 @@ export default function AcceptInvitationPage() {
         </div>
 
         <div className="bg-white border border-border rounded-xl p-6 shadow-sm">
+          {!isLoggedIn && (
+            <>
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Connexion Google annulée')}
+                  theme="outline"
+                  size="large"
+                  text="continue_with"
+                  shape="rectangular"
+                  width="368"
+                />
+              </div>
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 border-t border-border" />
+                <span className="text-xs text-text-secondary">ou</span>
+                <div className="flex-1 border-t border-border" />
+              </div>
+            </>
+          )}
           <form onSubmit={handleAccept} className="space-y-4">
             {preview.needs_account ? (
               <>
