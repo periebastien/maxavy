@@ -4,12 +4,18 @@ const express = require('express')
 const helmet = require('helmet')
 const cors = require('cors')
 const rateLimit = require('express-rate-limit')
+const { jsonRateLimitHandler } = require('./middlewares/rate-limit-handler')
 const sequelize = require('./config/database')
 const { startScheduledInvitationsJob } = require('./jobs/scheduled-invitations')
 const { startSyncReviewsJob } = require('./jobs/sync-reviews')
 const { startScanGeogridJob } = require('./jobs/scan-geogrid')
 
 const app = express()
+
+// Derrière Apache/Passenger (reverse proxy) : sans ça, req.ip vaut l'IP du proxy pour TOUT LE MONDE →
+// le rate limit ci-dessous devient un quota global au site entier au lieu d'un quota par visiteur.
+// '1' = ne fait confiance qu'au premier saut (le proxy Plesk local), pas à un X-Forwarded-For arbitraire.
+app.set('trust proxy', 1)
 
 // CSP désactivée : le backend sert aussi le SPA React (Google Maps/OAuth chargés depuis des
 // domaines tiers) ; la CSP par défaut de helmet casserait la page. À durcir plus tard.
@@ -27,7 +33,7 @@ app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }))
 
 app.use(express.json())
 
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }))
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 600, handler: jsonRateLimitHandler }))
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', env: process.env.NODE_ENV }))
 

@@ -2,8 +2,9 @@ const router = require('express').Router()
 const rateLimit = require('express-rate-limit')
 const controller = require('./auth.controller')
 const { authMiddleware } = require('../../middlewares/auth.middleware')
+const { jsonRateLimitHandler } = require('../../middlewares/rate-limit-handler')
 
-const sensitiveLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
+const sensitiveLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, handler: jsonRateLimitHandler })
 
 router.post('/register',        controller.register)
 router.post('/login',           controller.login)

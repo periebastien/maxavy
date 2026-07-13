@@ -3,11 +3,12 @@ const cors = require('cors')
 const rateLimit = require('express-rate-limit')
 const ctrl = require('./widget.controller')
 const { authMiddleware } = require('../../middlewares/auth.middleware')
+const { jsonRateLimitHandler } = require('../../middlewares/rate-limit-handler')
 
 // Routes publiques (sans auth) — embarquées sur les sites clients.
 // CORS ouvert (le widget est chargé depuis n'importe quel domaine client) + rate limit dédié permissif.
 const publicCors = cors({ origin: '*' })
-const publicLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 300 })
+const publicLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 300, handler: jsonRateLimitHandler })
 
 router.get('/runtime.js',   publicCors, publicLimiter, ctrl.getRuntimeJs)
 router.get('/:id/public',   publicCors, publicLimiter, ctrl.getPublic)
