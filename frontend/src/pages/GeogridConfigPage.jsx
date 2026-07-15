@@ -394,6 +394,7 @@ export default function GeogridConfigPage() {
   const allowedFrequencies = quota?.allowed_frequencies || ['weekly']
   const atMaxKeywords = quota?.max_keywords != null && keywords.length >= quota.max_keywords
   const atMaxCompetitors = quota?.max_competitors != null && competitors.length >= quota.max_competitors
+  const insufficientCredits = quota?.report_cost != null && quota?.credit_balance != null && quota.credit_balance < quota.report_cost
   const previewPoints = preview?.points || []
   const pointCount = previewPoints.length
   // Rayon du disque réel = distance du point le plus éloigné du centre. Sert au contour de cercle
@@ -683,10 +684,18 @@ export default function GeogridConfigPage() {
                   <p className="text-xs text-text-secondary">
                     Aucun rapport n'a encore été exécuté sur cette fiche — on ne peut pas encore détecter vos concurrents automatiquement.
                   </p>
-                  <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length} className="mt-2.5">
-                    {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
-                    Lancer un premier rapport maintenant
-                  </Button>
+                  <div className="flex items-center gap-3 mt-2.5">
+                    <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length || insufficientCredits}
+                      className="disabled:opacity-40 disabled:cursor-not-allowed">
+                      {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
+                      Lancer un premier rapport maintenant
+                    </Button>
+                    {insufficientCredits && (
+                      <span className="text-xs text-danger">
+                        Crédits insuffisants pour lancer un rapport ({quota.report_cost} nécessaires, {quota.credit_balance} disponibles)
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -735,7 +744,12 @@ export default function GeogridConfigPage() {
                   {hasCompletedRun && (
                     <p className="text-xs text-text-tertiary">Un rapport a déjà été effectué sur cette fiche — les suivants sont automatiques selon la planification.</p>
                   )}
-                  <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length || hasCompletedRun}
+                  {insufficientCredits && !hasCompletedRun && (
+                    <span className="text-xs text-danger">
+                      Crédits insuffisants pour lancer un rapport ({quota.report_cost} nécessaires, {quota.credit_balance} disponibles)
+                    </span>
+                  )}
+                  <Button onClick={launchFirstReport} disabled={launchingReport || !keywords.length || hasCompletedRun || insufficientCredits}
                     className="disabled:opacity-40 disabled:cursor-not-allowed">
                     {launchingReport ? <Loader2 size={15} className="animate-spin" /> : null}
                     Lancer un premier rapport maintenant

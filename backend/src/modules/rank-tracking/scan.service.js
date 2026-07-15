@@ -135,18 +135,29 @@ async function submitScanForKeyword(keyword, { runId, trigger = 'manual' } = {})
   const totalCost = costPerPoint * pointSpecs.length
   const owner = business ? await User.findByPk(business.owner_id) : null
 
-  if (!owner || owner.credit_balance < totalCost) {
+  async function failInsufficientCredits() {
     await scan.update({
       status: 'failed',
       error_message: 'Crédits insuffisants',
       next_attempt_at: null,
-      retry_reason: null,
+      retry_reason: 'credits', // jamais retenté gratuitement (relaunchDueRetryRuns/closeFinishedRuns l'excluent)
     })
     if (trigger === 'manual') throw { status: 402, message: 'Crédits insuffisants' }
     return GeogridScan.findByPk(scan.id)
   }
 
-  await User.decrement('credit_balance', { by: totalCost, where: { id: owner.id } })
+  if (!owner || !Number.isFinite(totalCost)) return failInsufficientCredits()
+
+  // Débit atomique (anti-race) : UPDATE conditionnel où credit_balance >= totalCost, au lieu d'un
+  // check-then-decrement — sinon plusieurs scans d'un même run lancés en parallèle (Promise.allSettled
+  // dans submitRunScans) passent tous le check avant que le premier ait décrémenté, et le solde devient
+  // négatif (constaté en prod : -207). totalCost est calculé côté serveur (jamais une entrée utilisateur).
+  const [affected] = await User.update(
+    { credit_balance: literal(`credit_balance - ${totalCost}`) },
+    { where: { id: owner.id, credit_balance: { [Op.gte]: totalCost } } },
+  )
+  if (affected === 0) return failInsufficientCredits()
+
   await Credit.create({ business_id: businessId, amount: -totalCost, action_type: 'geogrid_scan', source: 'plan' })
 
   return postScanTasks(scan)
@@ -441,6 +452,20 @@ async function createRun(businessId, userId, locationId) {
   const location = await Location.findOne({ where: { id: locationId, business_id: businessId } })
   if (!location) throw { status: 404, message: 'Localisation introuvable' }
   const config = await ensureConfigForLocation(location, business)
+
+  // Pré-check crédits AVANT de créer le run : sans ça, un solde insuffisant produit un rapport « vide »
+  // (tous ses scans échouent en 402, avalés par Promise.allSettled dans submitRunScans) sans jamais
+  // remonter d'erreur à l'UI. grid_size² = nombre de points, invariant conservé pour 'circle' (grille
+  // polaire, cf. geogrid.utils.js).
+  const activeKeywordsCount = await GeogridKeyword.count({ where: { config_id: config.id, active: true } })
+  const costPerPoint = await getCost('geogrid_point')
+  const totalCost = activeKeywordsCount * config.grid_size * config.grid_size * costPerPoint
+  const owner = await User.findByPk(business.owner_id)
+  const balance = owner ? Number(owner.credit_balance) : 0
+  if (totalCost > 0 && balance < totalCost) {
+    throw { status: 402, message: `Crédits insuffisants : ${totalCost} crédits nécessaires, ${balance} disponibles` }
+  }
+
   return launchRun(config, 'manual')
 }
 
@@ -573,17 +598,23 @@ async function closeFinishedRuns() {
   const running = await GeogridRun.findAll({ where: { status: 'running' } })
   let closed = 0, retried = 0
   for (const run of running) {
-    const scans = await GeogridScan.findAll({ where: { run_id: run.id }, attributes: ['status'] })
+    const scans = await GeogridScan.findAll({ where: { run_id: run.id }, attributes: ['status', 'retry_reason'] })
     const unresolved = scans.filter(s => !['done', 'failed'].includes(s.status))
     if (unresolved.length) continue
 
-    const failedCount = scans.filter(s => s.status === 'failed').length
+    const failedScans = scans.filter(s => s.status === 'failed')
+    const failedCount = failedScans.length
     const usable = scans.length - failedCount // scans 'done' exploitables
     const hasFailures = run.has_failures || failedCount > 0 || scans.length < run.keywords_total
 
+    // Tous les scans échoués le sont pour crédits insuffisants (et aucun scan manquant côté lancement) →
+    // retenter ne sert à rien tant que le solde n'a pas changé : clôture directe, pas de retry_pending.
+    const allFailuresAreCredits = usable === 0 && failedCount > 0
+      && scans.length === run.keywords_total && failedScans.every(s => s.retry_reason === 'credits')
+
     // Level C : rapport entièrement inexploitable (aucun scan 'done') et reprises de run non épuisées →
     // replanifier une relance complète (statut retry_pending → ni clôture ni alerte tant que ça peut réussir).
-    if (hasFailures && usable === 0 && run.attempts < rtConfig.maxRunAttempts) {
+    if (hasFailures && usable === 0 && !allFailuresAreCredits && run.attempts < rtConfig.maxRunAttempts) {
       const delayMs = computeBackoffMs(rtConfig.runBackoffMinutes, run.attempts + 1, run.id, rtConfig.retryJitterMinutes)
       await run.update({ status: 'retry_pending', attempts: run.attempts + 1, next_attempt_at: new Date(Date.now() + delayMs) })
       retried++
@@ -719,7 +750,9 @@ async function relaunchDueRetryRuns(batchSize, concurrency) {
     const activeKeywords = await GeogridKeyword.findAll({ where: { config_id: config.id, active: true }, attributes: ['id'] })
     const activeKwIds = new Set(activeKeywords.map(k => k.id))
     const failedScans = await GeogridScan.findAll({ where: { run_id: run.id, status: 'failed' } })
-    const toRetry = failedScans.filter(s => !doneKwIds.has(s.keyword_id) && activeKwIds.has(s.keyword_id))
+    // retry_reason='credits' : jamais débité → un re-post via postScanTasks poserait des tâches DataForSEO
+    // sans débit correspondant. Retenter ne sert de toute façon à rien tant que le solde n'a pas changé.
+    const toRetry = failedScans.filter(s => !doneKwIds.has(s.keyword_id) && activeKwIds.has(s.keyword_id) && s.retry_reason !== 'credits')
 
     await run.update({ status: 'running', next_attempt_at: null })
     relaunched++

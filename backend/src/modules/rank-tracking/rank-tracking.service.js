@@ -3,8 +3,10 @@ const GeogridKeyword = require('../../models/GeogridKeyword')
 const GeogridConfig = require('../../models/GeogridConfig')
 const Business = require('../../models/Business')
 const Location = require('../../models/Location')
+const User = require('../../models/User')
 const { assertAccess } = require('../businesses/business.service')
 const { getPlanForBusiness } = require('../../services/plan-resolver')
+const { getCost } = require('../../services/credit-costs')
 const { buildGrid } = require('./geogrid.utils')
 const { computeNextRunAt, isValidTimezone } = require('./schedule.utils')
 
@@ -168,7 +170,24 @@ async function getQuotaStatus(businessId, userId, locationId) {
   const where = { business_id: businessId, active: true }
   if (locationId) where.location_id = locationId
   const used = await GeogridKeyword.count({ where })
-  return { ...quota, used }
+
+  // Coût estimé du prochain rapport + solde du pool owner — alimente l'avertissement « crédits
+  // insuffisants » côté front (page Configuration). Lecture SEULE de la config (pas
+  // ensureConfigForLocation : elle en créerait une active avec next_run_at sur un simple GET, que le
+  // cron ramasserait → rapports vides). Pas de config encore → report_cost null, pas d'avertissement.
+  let report_cost = null
+  let credit_balance = null
+  if (locationId) {
+    const config = await GeogridConfig.findOne({ where: { location_id: locationId, business_id: businessId } })
+    if (config) {
+      const costPerPoint = await getCost('geogrid_point')
+      report_cost = used * config.grid_size * config.grid_size * costPerPoint
+    }
+    const owner = await User.findByPk(business.owner_id)
+    credit_balance = owner ? Number(owner.credit_balance) : null
+  }
+
+  return { ...quota, used, report_cost, credit_balance }
 }
 
 // Aperçu de grille (sans créer de scan ni de config) — accepte un centre et une forme optionnels

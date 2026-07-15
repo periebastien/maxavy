@@ -218,6 +218,8 @@ function AccountMenu({ user }) {
   )
 }
 
+const LOW_CREDIT_THRESHOLD = 100
+
 export default function Sidebar({ user, open = false, onClose }) {
   const { activeBusiness } = useBusiness()
   const { locations = [] } = useLocations() || {}
@@ -271,9 +273,11 @@ export default function Sidebar({ user, open = false, onClose }) {
         <NavLink to="/credits" onClick={onClose} className="block px-3 group">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-text-secondary group-hover:text-accent transition-colors">Crédits</span>
-            <span className="text-xs font-medium text-text-primary flex items-center gap-1">
+            <span className={`text-xs flex items-center gap-1 ${
+              credits <= 0 ? 'text-danger font-bold' : credits < LOW_CREDIT_THRESHOLD ? 'text-danger font-medium' : 'text-text-primary font-medium'
+            }`}>
               {credits ?? 0}
-              <Zap size={10} className="text-accent" />
+              <Zap size={10} className={credits <= 0 ? 'text-danger' : 'text-accent'} />
             </span>
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
