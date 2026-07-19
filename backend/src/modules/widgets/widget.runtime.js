@@ -104,13 +104,14 @@ function LOCAGAIN_RUNTIME() {
 
   // Google : /a-/ = vraie photo de profil ; /a/ = avatar lettre généré (jamais affiché tel quel)
   function isCustomAvatar(url) { return !!url && url.indexOf('/a-/') !== -1 }
-  function avatarEl(nm, img, borderColor) {
+  function avatarEl(nm, img, borderColor, z) {
+    var zs = z ? ';position:relative;z-index:' + z : ''
     if (isCustomAvatar(img)) {
       return '<img class="lcg-av lcg-av-img" src="' + esc(img) + '" alt="' + esc(nm || '') + '"'
         + ' loading="lazy" referrerpolicy="no-referrer" data-fb="' + esc(initial(nm)) + '" data-c="' + esc(hashColor(nm)) + '"'
-        + ' style="border-color:' + borderColor + '">'
+        + ' style="border-color:' + borderColor + zs + '">'
     }
-    return '<span class="lcg-av" style="background:' + hashColor(nm) + ';border-color:' + borderColor + '">' + esc(initial(nm)) + '</span>'
+    return '<span class="lcg-av" style="background:' + hashColor(nm) + ';border-color:' + borderColor + zs + '">' + esc(initial(nm)) + '</span>'
   }
   function avatars(reviews, n, bg) {
     var k = Math.min(n, reviews.length), out = '', picked = [], i
@@ -121,7 +122,7 @@ function LOCAGAIN_RUNTIME() {
       if (!isCustomAvatar(reviews[i].author_image_url)) picked.push(reviews[i])
     }
     for (i = 0; i < picked.length; i++) {
-      out += avatarEl(picked[i].author_name, picked[i].author_image_url, bg)
+      out += avatarEl(picked[i].author_name, picked[i].author_image_url, bg, picked.length - i)
     }
     return '<span class="lcg-avs">' + out + '</span>'
   }
