@@ -102,8 +102,10 @@ function LOCAGAIN_RUNTIME() {
     ;(root.host ? root : document.head).appendChild(l)
   }
 
+  // Google : /a-/ = vraie photo de profil ; /a/ = avatar lettre généré (jamais affiché tel quel)
+  function isCustomAvatar(url) { return !!url && url.indexOf('/a-/') !== -1 }
   function avatarEl(nm, img, borderColor) {
-    if (img) {
+    if (isCustomAvatar(img)) {
       return '<img class="lcg-av lcg-av-img" src="' + esc(img) + '" alt="' + esc(nm || '') + '"'
         + ' loading="lazy" referrerpolicy="no-referrer" data-fb="' + esc(initial(nm)) + '" data-c="' + esc(hashColor(nm)) + '"'
         + ' style="border-color:' + borderColor + '">'
@@ -111,9 +113,15 @@ function LOCAGAIN_RUNTIME() {
     return '<span class="lcg-av" style="background:' + hashColor(nm) + ';border-color:' + borderColor + '">' + esc(initial(nm)) + '</span>'
   }
   function avatars(reviews, n, bg) {
-    var k = Math.min(n, reviews.length), out = ''
-    for (var i = 0; i < k; i++) {
-      out += avatarEl(reviews[i].author_name, reviews[i].author_image_url, bg)
+    var k = Math.min(n, reviews.length), out = '', picked = [], i
+    for (i = 0; i < reviews.length && picked.length < k; i++) {
+      if (isCustomAvatar(reviews[i].author_image_url)) picked.push(reviews[i])
+    }
+    for (i = 0; i < reviews.length && picked.length < k; i++) {
+      if (!isCustomAvatar(reviews[i].author_image_url)) picked.push(reviews[i])
+    }
+    for (i = 0; i < picked.length; i++) {
+      out += avatarEl(picked[i].author_name, picked[i].author_image_url, bg)
     }
     return '<span class="lcg-avs">' + out + '</span>'
   }
