@@ -390,6 +390,19 @@ export default function SettingsPage() {
                   <>
                     <p className="text-sm font-medium text-text-primary">Connecté</p>
                     <p className="text-xs text-text-secondary">{googleStatus.email}</p>
+                    {googleStatus.verified_location_match === true && (
+                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                        <Check size={12} /> Fiche vérifiée : ce compte gère bien votre fiche Google.
+                      </p>
+                    )}
+                    {googleStatus.verified_location_match === false && (
+                      <p className="text-xs text-amber-600 mt-1 flex items-start gap-1">
+                        <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                        Le compte {googleStatus.email} ne semble pas gérer la fiche Google de cette entreprise.
+                        Les avis sont tout de même synchronisés (lecture publique), mais vérifiez que vous avez
+                        connecté le bon compte.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>

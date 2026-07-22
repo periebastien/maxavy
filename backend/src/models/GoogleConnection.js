@@ -10,6 +10,8 @@ const GoogleConnection = sequelize.define('GoogleConnection', {
   expires_at:           { type: DataTypes.DATE },
   last_synced_at:       { type: DataTypes.DATE },
   google_account_email: { type: DataTypes.STRING },
+  verified_location_match: { type: DataTypes.BOOLEAN, allowNull: true },
+  verification_error:      { type: DataTypes.TEXT, allowNull: true },
 }, { tableName: 'google_connections', underscored: true })
 
 module.exports = GoogleConnection
