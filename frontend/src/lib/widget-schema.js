@@ -40,7 +40,7 @@ const CAROUSEL = {
   cardsDesktop: 3, cardsMobile: 1, autoplay: true, intervalMs: 4000, pauseOnHover: true,
   showArrows: true, showDots: true, showAvatar: true, showAuthorName: true, showDate: true,
   dateFormat: 'relative', showStars: true, maxChars: 180, showReadMore: true, requireText: false,
-  sort: 'recent', limit: 20, showHeader: true, cardRadius: 12, cardShadow: 'soft', gap: 16,
+  sort: 'recent', limit: 20, showHeader: true, cardBackgroundColor: 'auto', cardRadius: 12, cardShadow: 'soft', gap: 16,
 }
 
 export function defaultConfig(type) {
@@ -90,6 +90,7 @@ export const FIELDS = [
   // ---- CARROUSEL · apparence
   { scope: 'carousel', key: 'cardsDesktop', label: 'Cartes (desktop)', type: 'number', section: 'apparence', min: 1, max: 6, step: 1, styles: ['slider', 'grid'] },
   { scope: 'carousel', key: 'cardsMobile', label: 'Cartes (mobile)', type: 'number', section: 'apparence', min: 1, max: 3, step: 1, styles: ['slider', 'grid'] },
+  { scope: 'carousel', key: 'cardBackgroundColor', label: 'Fond des cartes', type: 'color', section: 'apparence', allowAuto: true, allowTransparent: true, allowOpacity: true },
   { scope: 'carousel', key: 'cardRadius', label: 'Arrondi des cartes', type: 'number', section: 'apparence', min: 0, max: 32, step: 1 },
   { scope: 'carousel', key: 'cardShadow', label: 'Ombre des cartes', type: 'enum', section: 'apparence', options: [['none', 'Aucune'], ['soft', 'Légère'], ['medium', 'Moyenne'], ['strong', 'Forte']] },
   { scope: 'carousel', key: 'gap', label: 'Espacement', type: 'number', section: 'apparence', min: 0, max: 48, step: 1 },

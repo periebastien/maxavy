@@ -243,9 +243,10 @@ function LOCAGAIN_RUNTIME() {
     var content = '<div class="lcg-car">' + header(payload, pal) + body + '</div>'
     var radius = cw.cardRadius + 'px'
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
+    var cardBg = (!cw.cardBackgroundColor || cw.cardBackgroundColor === 'auto') ? pal.bg : cw.cardBackgroundColor
     var css = '.lcg-car{background:' + pal.bg + ';border-radius:14px;padding:' + cpad + 'px}'
       + '.lcg-hd{display:flex;align-items:center;gap:10px;padding:6px 2px 14px}.lcg-hd-avg{font-size:22px;font-weight:500;color:' + pal.text + '}.lcg-hd-cnt{font-size:13px;color:' + pal.muted + ';margin-left:auto}'
-      + '.lcg-rc{background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';padding:14px 16px;box-shadow:' + shadow(cw.cardShadow) + '}'
+      + '.lcg-rc{background:' + cardBg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';padding:14px 16px;box-shadow:' + shadow(cw.cardShadow) + '}'
       + '.lcg-rc-head{display:flex;align-items:center;gap:10px}.lcg-rc-id{flex:1;min-width:0}.lcg-rc-name{margin:0;font-size:14px;font-weight:500;color:' + pal.text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lcg-rc-date{margin:0;font-size:12px;color:' + pal.muted + '}'
       + '.lcg-rc-stars{margin:9px 0 7px}.lcg-rc-text{margin:0;font-size:13px;line-height:1.55;color:' + pal.muted + '}'
       + '.lcg-rc-more{display:block;margin:4px 0 0;padding:0;border:none;background:none;font:inherit;font-size:13px;font-weight:500;color:' + pal.accent + ';cursor:pointer;text-decoration:underline}'

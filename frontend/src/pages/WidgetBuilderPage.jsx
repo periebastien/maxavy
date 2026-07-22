@@ -53,6 +53,17 @@ function ColorField({ value, onChange, allowAuto, allowTransparent, allowOpacity
   const rgb = m ? '#' + m[1] : '#ffffff'
   const alpha = m && m[2] ? Math.round((parseInt(m[2], 16) / 255) * 100) : 100
   const combine = (hex6, pct) => pct >= 100 ? hex6 : hex6 + Math.round((pct / 100) * 255).toString(16).padStart(2, '0')
+  const [hexInput, setHexInput] = useState(m ? rgb : '')
+  useEffect(() => { setHexInput(m ? rgb : '') }, [rgb, m ? 1 : 0])
+  const handleHexChange = e => {
+    const v = e.target.value
+    setHexInput(v)
+    if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+      const hex6 = ('#' + v.replace('#', '')).toLowerCase()
+      onChange(combine(hex6, alpha))
+    }
+  }
+  const handleHexBlur = () => setHexInput(m ? rgb : '')
   return (
     <div className="flex items-center gap-1.5">
       {allowAuto && <Chip active={value === 'auto'} onClick={() => onChange('auto')}>Auto</Chip>}
@@ -63,6 +74,14 @@ function ColorField({ value, onChange, allowAuto, allowTransparent, allowOpacity
         onChange={e => onChange(combine(e.target.value, alpha))}
         className="w-7 h-7 rounded border border-border cursor-pointer p-0 bg-white shrink-0"
         title="Couleur personnalisée"
+      />
+      <input
+        type="text"
+        value={hexInput}
+        onChange={handleHexChange}
+        onBlur={handleHexBlur}
+        placeholder="#RRGGBB"
+        className="w-20 h-7 px-1.5 rounded border border-border text-xs font-mono text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
       />
       {allowOpacity && m && (
         <label className="flex items-center gap-1 text-xs text-text-tertiary" title="Opacité">

@@ -50,6 +50,7 @@ const CAROUSEL_DEFAULTS = {
   sort: 'recent',
   limit: 20,
   showHeader: true,
+  cardBackgroundColor: 'auto',
   cardRadius: 12,
   cardShadow: 'soft',
   gap: 16,
@@ -84,7 +85,7 @@ const NUM_BOUNDS = {
   gap: [0, 48],
 }
 
-const COLOR_KEYS = new Set(['backgroundColor', 'textColor', 'mutedColor', 'starColor', 'borderColor', 'accentColor'])
+const COLOR_KEYS = new Set(['backgroundColor', 'textColor', 'mutedColor', 'starColor', 'borderColor', 'accentColor', 'cardBackgroundColor'])
 const TEXT_MAX = { qualityLabel: 40, ctaText: 40, googleUrl: 300 }
 const HEX_RE = /^#[0-9a-fA-F]{3,8}$/
 
