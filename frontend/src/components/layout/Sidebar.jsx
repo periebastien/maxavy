@@ -33,7 +33,7 @@ const sections = [
   {
     title: 'CLIENTS',
     items: [
-      { label: 'Liste clients', to: '/customers', icon: Users, count: 0 },
+      { label: 'Liste clients', to: '/customers', icon: Users },
       { label: 'Invitations', to: '/invitations', icon: Mail },
     ]
   },
@@ -42,7 +42,7 @@ const sections = [
     items: [
       { label: 'Page de collecte', to: '/parametres-page-collecte', icon: Globe },
       { label: 'QR Code', to: '/qrcode', icon: QrCode },
-      { label: 'Widgets', to: '/widgets', icon: LayoutTemplate, count: 0 },
+      { label: 'Widgets', to: '/widgets', icon: LayoutTemplate },
     ]
   },
   {
@@ -222,8 +222,9 @@ const LOW_CREDIT_THRESHOLD = 100
 
 export default function Sidebar({ user, open = false, onClose }) {
   const { activeBusiness } = useBusiness()
-  const { locations = [] } = useLocations() || {}
+  const { locations = [], activeLocation } = useLocations() || {}
   const [credits, setCredits] = useState(0)
+  const [counts, setCounts] = useState({ customers: null, widgets: null, reviews: null })
 
   useEffect(() => {
     if (!activeBusiness) return
@@ -231,6 +232,23 @@ export default function Sidebar({ user, open = false, onClose }) {
       .then(b => setCredits(b.balance ?? 0))
       .catch(() => {})
   }, [activeBusiness])
+
+  useEffect(() => {
+    if (!activeBusiness) return
+    const locationParam = activeLocation ? `&location_id=${activeLocation.id}` : ''
+
+    api.get(`/api/v1/customers/stats?business_id=${activeBusiness.id}${locationParam}`)
+      .then(s => setCounts(c => ({ ...c, customers: s.total })))
+      .catch(() => {})
+
+    api.get(`/api/v1/widgets?business_id=${activeBusiness.id}${locationParam}`)
+      .then(w => setCounts(c => ({ ...c, widgets: w.length })))
+      .catch(() => {})
+
+    api.get(`/api/v1/reviews?business_id=${activeBusiness.id}${locationParam}&limit=1`)
+      .then(r => setCounts(c => ({ ...c, reviews: r.total })))
+      .catch(() => {})
+  }, [activeBusiness, activeLocation])
 
   return (
     <aside
@@ -258,7 +276,13 @@ export default function Sidebar({ user, open = false, onClose }) {
               {section.items.map(item => (
                 <NavItem
                   key={item.to}
-                  item={item.to === '/locations' ? { ...item, count: locations.length } : item}
+                  item={
+                    item.to === '/locations' ? { ...item, count: locations.length }
+                    : item.to === '/customers' ? { ...item, count: counts.customers ?? undefined }
+                    : item.to === '/widgets' ? { ...item, count: counts.widgets ?? undefined }
+                    : item.to === '/reviews' ? { ...item, count: counts.reviews ?? undefined }
+                    : item
+                  }
                   onClose={onClose}
                 />
               ))}
