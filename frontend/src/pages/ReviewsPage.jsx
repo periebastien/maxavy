@@ -86,6 +86,8 @@ export default function ReviewsPage() {
   const [isLoading, setIsLoading]   = useState(true)
   const [isSyncing, setIsSyncing]   = useState(false)
   const [error, setError]           = useState(null)
+  const [success, setSuccess]       = useState(null)
+  const [syncStatus, setSyncStatus] = useState(null)
 
   const load = useCallback(async () => {
     if (!activeBusiness || !locId) {
@@ -113,18 +115,32 @@ export default function ReviewsPage() {
   useEffect(() => { load() }, [load])
   useEffect(() => { setPage(1) }, [locId, starFilter])
 
+  useEffect(() => {
+    if (!activeBusiness) { setSyncStatus(null); return }
+    api.get(`/api/v1/reviews/sync/status?business_id=${activeBusiness.id}`)
+      .then(setSyncStatus)
+      .catch(() => {})
+  }, [activeBusiness])
+
   async function handleSync() {
     if (!activeBusiness) return
     setIsSyncing(true)
     setError(null)
+    setSuccess(null)
     try {
       await api.post(`/api/v1/reviews/sync?business_id=${activeBusiness.id}`)
       // Tâches DataForSEO asynchrones : on poll l'état (jusqu'à ~90 s) puis on recharge.
       const deadline = Date.now() + 90000
+      let lastStatus = null
       while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, 3000))
         const s = await api.get(`/api/v1/reviews/sync/status?business_id=${activeBusiness.id}`)
+        lastStatus = s
         if (!s.running) break
+      }
+      if (lastStatus) setSyncStatus(lastStatus)
+      if (lastStatus?.last_job?.status === 'done' && lastStatus.last_job.reviews_upserted > 0) {
+        setSuccess(`${lastStatus.last_job.reviews_upserted} avis importés`)
       }
       await load()
     } catch (err) {
@@ -171,6 +187,25 @@ export default function ReviewsPage() {
           </div>
         )}
 
+        {success && (
+          <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3">
+            {success}
+          </div>
+        )}
+
+        {!error && syncStatus?.running && (
+          <div className="flex items-center gap-2 text-sm text-accent bg-accent/5 border border-accent/20 rounded-lg px-4 py-3">
+            <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+            Synchronisation des avis en cours…
+          </div>
+        )}
+
+        {!syncStatus?.running && syncStatus?.last_job?.status === 'failed' && (
+          <div className="text-sm text-danger bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+            La dernière synchronisation a échoué : {syncStatus.last_job.error_message || 'erreur inconnue'}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex justify-center py-16">
             <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -178,8 +213,17 @@ export default function ReviewsPage() {
         ) : reviews.length === 0 ? (
           <div className="text-center py-16 text-text-tertiary">
             <Star size={32} className="mx-auto mb-3 text-gray-200 fill-gray-200" />
-            <p className="text-sm font-medium text-text-secondary">Aucun avis</p>
-            <p className="text-xs mt-1">Synchronisez pour récupérer vos avis Google Business Profile.</p>
+            {syncStatus?.running ? (
+              <>
+                <p className="text-sm font-medium text-text-secondary">Synchronisation des avis en cours…</p>
+                <p className="text-xs mt-1">Cela peut prendre jusqu'à une minute.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-text-secondary">Aucun avis</p>
+                <p className="text-xs mt-1">Synchronisez pour récupérer vos avis Google Business Profile.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

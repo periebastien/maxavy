@@ -17,6 +17,10 @@ module.exports = {
   // avis les plus récents via sort_by=newest ; monter REVIEWS_BACKFILL_DEPTH si besoin de plus d'historique).
   syncDepth: posInt('REVIEWS_SYNC_DEPTH', 10),              // avis récupérés en incrémental (sort_by=newest)
   backfillDepth: posInt('REVIEWS_BACKFILL_DEPTH', 200),     // avis au 1er passage (historique), une seule fois
+  // Fiche avec > backfillDepth avis au total (ex. 258) : relance automatique unique à profondeur étendue
+  // (arrondie à la dizaine sup.), plafonnée ici. DataForSEO facture $0.00075 par tranche de 10 sur le depth
+  // demandé → monter ce plafond a un coût direct (ex. 2000 = jusqu'à $0.15 one-shot sur la relance).
+  backfillMaxDepth: posInt('REVIEWS_BACKFILL_MAX_DEPTH', 2000),
   sortBy: process.env.REVIEWS_SORT_BY || 'newest',
   // File standard par défaut (~45 min, $0.00075/10 avis) ; 'priority' = ~1 min, ×2 (utile si cadence < 45 min)
   priority: (process.env.REVIEWS_QUEUE || 'standard') === 'priority' ? 2 : 1,

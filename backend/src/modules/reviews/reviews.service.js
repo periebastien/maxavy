@@ -93,10 +93,10 @@ async function getEligibleBusinesses() {
 // Crée un job + soumet la tâche. kind = backfill (1er passage, profondeur élevée) tant que la fiche n'a
 // jamais été backfillée, sinon incremental (avis récents). Ne touche PAS à la planification de la fiche
 // (next_reviews_sync_at) : c'est l'appelant (cron/manuel) qui l'avance, avant l'appel, pour l'anti-boucle.
-async function enqueueSyncForLocation(location, business, { depthOverride, priorityOverride } = {}) {
+async function enqueueSyncForLocation(location, business, { depthOverride, priorityOverride, kindOverride } = {}) {
   if (!location.google_place_id) throw { status: 400, message: 'Localisation sans fiche Google (place_id)' }
 
-  const kind = location.reviews_backfilled_at ? 'incremental' : 'backfill'
+  const kind = kindOverride || (location.reviews_backfilled_at ? 'incremental' : 'backfill')
   const depth = depthOverride || (kind === 'backfill' ? config.backfillDepth : config.syncDepth)
 
   const job = await ReviewSyncJob.create({
@@ -415,6 +415,31 @@ async function resolveLocationJob(job, result) {
     patch.next_reviews_sync_at = new Date()
   }
   await location.update(patch)
+
+  // Fiche avec plus d'avis que le depth du backfill demandé (ex. 258 > 200) → les plus anciens n'ont
+  // jamais été récupérés. Relance UNIQUE (garde-fou : pas si ce job était déjà une relance, i.e. son
+  // depth dépassait déjà backfillDepth) à profondeur étendue, plafonnée à backfillMaxDepth.
+  const total = patch.total_reviews_count
+  if (
+    job.kind === 'backfill' &&
+    job.depth <= config.backfillDepth &&
+    typeof total === 'number' &&
+    total > job.depth
+  ) {
+    const extendedDepth = Math.min(Math.ceil(total / 10) * 10, config.backfillMaxDepth)
+    if (extendedDepth > job.depth && !(await hasActiveJob(location.id))) {
+      const business = await Business.findByPk(job.business_id)
+      if (business) {
+        console.log(`[reviews] backfill étendu location ${location.id}: total ${total} > depth ${job.depth} → relance depth ${extendedDepth}`)
+        try {
+          await enqueueSyncForLocation(location, business, { depthOverride: extendedDepth, kindOverride: 'backfill' })
+        } catch (err) {
+          console.error(`[reviews] échec relance backfill étendu location ${location.id}:`, err.message)
+        }
+      }
+    }
+  }
+
   return true
 }
 
@@ -459,6 +484,7 @@ async function triggerSync(businessId, userId) {
 
   const locations = await Location.findAll({ where: { business_id: businessId } })
   let queued = 0
+  let firstError = null
   for (const loc of locations) {
     if (await hasActiveJob(loc.id)) continue
     await loc.update({ next_reviews_sync_at: computeNextSyncAt(loc.id, quota.interval_minutes, Date.now()) })
@@ -469,21 +495,37 @@ async function triggerSync(businessId, userId) {
       queued++
     } catch (err) {
       console.error(`[reviews] enqueue manuel location ${loc.id}:`, err.message)
+      if (!firstError) firstError = err
     }
   }
+  // Aucune location enqueue (toutes en erreur) : on remonte la vraie cause au controller (status/message).
+  if (queued === 0 && firstError && locations.length > 0) throw firstError
   return { queued, locations: locations.length }
 }
 
 // État de synchro pour le polling front (après clic « Synchroniser »).
 async function getSyncStatus(businessId, userId) {
   await ensureBusinessAccess(businessId, userId)
-  const active = await ReviewSyncJob.count({ where: { business_id: businessId, status: { [Op.in]: ['pending', 'running'] } } })
+  // competitor_place_id null : ne compter que les jobs de la fiche du business (pas les avis concurrents)
+  const active = await ReviewSyncJob.count({ where: { business_id: businessId, competitor_place_id: null, status: { [Op.in]: ['pending', 'running'] } } })
   const locations = await Location.findAll({ where: { business_id: businessId }, attributes: ['last_reviews_sync_at'] })
   const lastSyncedAt = locations.reduce((max, l) => {
     const t = l.last_reviews_sync_at
     return t && (!max || t > max) ? t : max
   }, null)
-  return { running: active > 0, active, last_synced_at: lastSyncedAt }
+
+  const lastJob = await ReviewSyncJob.findOne({
+    where: { business_id: businessId, competitor_place_id: null },
+    order: [['created_at', 'DESC']],
+  })
+  const last_job = lastJob ? {
+    status: lastJob.status,
+    error_message: lastJob.error_message,
+    reviews_upserted: lastJob.reviews_upserted,
+    finished_at: lastJob.finished_at || lastJob.created_at || null,
+  } : null
+
+  return { running: active > 0, active, last_synced_at: lastSyncedAt, last_job }
 }
 
 // ============ Lecture des avis (inchangé) ============
