@@ -173,14 +173,14 @@ function LOCAGAIN_RUNTIME() {
       var star1 = b.showStars ? star(17, pal.star) : ''
       var txt = (b.showRatingValue ? num1(c.lang, avg) : '') + (markWord ? ' Google' : '')
       var glogo = markLogo ? '<span class="lcg-bc-g' + (txt ? ' lcg-bc-g-sp' : '') + '">' + googleG(15) + '</span>' : ''
-      var cnt = b.showReviewCount ? '<span class="lcg-sep"></span>' + count + (c.lang === 'en' ? ' reviews' : ' avis') : ''
+      var cnt = b.showReviewCount ? '<span class="lcg-sep">|</span>' + count + (c.lang === 'en' ? ' reviews' : ' avis') : ''
       inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + glogo + cnt + '</strong>'
     }
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
     var justify = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
-      + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
+      + '.lcg-sep{color:' + pal.border + ';font-weight:400;margin:0 4px}'
       + '.lcg-bc-g{display:inline-block;vertical-align:-2px;line-height:0}.lcg-bc-g-sp{margin-left:5px}'
       + '.lcg-bf-g{display:block;line-height:0;margin-bottom:2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:' + fpad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + fradius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
@@ -193,7 +193,7 @@ function LOCAGAIN_RUNTIME() {
       + '.lcg-bc{gap:8px' + (py === null && px === null ? ';padding:6px 12px' : '') + '}'
       + '.lcg-bc-txt{font-size:14px}'
       + '.lcg-avs .lcg-av:nth-child(n+4){display:none}'
-      + '.lcg-sep{margin:0 6px}'
+      + '.lcg-sep{margin:0 3px}'
       + '}'
     var body = payload.style === 'framed'
       ? inner
