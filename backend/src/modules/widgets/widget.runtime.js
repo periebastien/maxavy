@@ -180,7 +180,7 @@ function LOCAGAIN_RUNTIME() {
     var justify = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
-      + '.lcg-sep{color:' + pal.border + ';font-weight:400;margin:0 4px}'
+      + '.lcg-sep{color:' + pal.muted + ';font-weight:400;opacity:.6;margin:0 4px}'
       + '.lcg-bc-g{display:inline-block;vertical-align:-2px;line-height:0}.lcg-bc-g-sp{margin-left:5px}'
       + '.lcg-bf-g{display:block;line-height:0;margin-bottom:2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:' + fpad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + fradius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
