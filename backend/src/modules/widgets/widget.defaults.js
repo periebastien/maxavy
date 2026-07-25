@@ -20,6 +20,8 @@ const BADGE_DEFAULTS = {
   shape: 'pill',
   size: 'medium',
   align: 'center',
+  paddingY: -1,
+  paddingX: -1,
   showShadow: true,
   showAvatars: true,
   avatarsCount: 4,
@@ -75,6 +77,8 @@ const ENUMS = {
 const NUM_BOUNDS = {
   minRating: [0, 5],
   containerPadding: [0, 64],
+  paddingY: [-1, 64],
+  paddingX: [-1, 64],
   avatarsCount: [1, 8],
   cardsDesktop: [1, 6],
   cardsMobile: [1, 3],

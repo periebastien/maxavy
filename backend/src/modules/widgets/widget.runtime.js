@@ -146,8 +146,13 @@ function LOCAGAIN_RUNTIME() {
     var cfg = payload.config, b = cfg.badge, c = cfg.common
     var avg = payload.aggregate.average, count = payload.aggregate.count
     var radius = b.shape === 'square' ? '6px' : b.shape === 'rounded' ? '12px' : '999px'
-    var pad = b.size === 'large' ? '10px 20px' : b.size === 'small' ? '5px 12px' : '7px 16px'
-    var fpad = b.size === 'large' ? '24px 38px' : b.size === 'small' ? '12px 20px' : '18px 30px'
+    // paddingY/paddingX : -1 (ou absent) = automatique selon la taille
+    var py = typeof b.paddingY === 'number' && b.paddingY >= 0 ? b.paddingY : null
+    var px = typeof b.paddingX === 'number' && b.paddingX >= 0 ? b.paddingX : null
+    var pad = (py !== null ? py : (b.size === 'large' ? 10 : b.size === 'small' ? 5 : 7)) + 'px '
+      + (px !== null ? px : (b.size === 'large' ? 20 : b.size === 'small' ? 12 : 16)) + 'px'
+    var fpad = (py !== null ? py : (b.size === 'large' ? 24 : b.size === 'small' ? 12 : 18)) + 'px '
+      + (px !== null ? px : (b.size === 'large' ? 38 : b.size === 'small' ? 20 : 30)) + 'px'
     var fradius = b.shape === 'square' ? '6px' : b.shape === 'pill' ? '24px' : '14px'
     var starAvg = b.starStyle === 'rounded' ? Math.round(avg) : avg
     var inner = ''
@@ -176,7 +181,7 @@ function LOCAGAIN_RUNTIME() {
       + '.lcg-wrap-inner{display:flex;flex-direction:column;align-items:center}'
       + '.lcg-cta{margin-top:6px;font-size:13px;font-weight:500;color:' + pal.muted + ';text-decoration:underline;text-align:center}'
       + '@media(max-width:480px){'
-      + '.lcg-bc{gap:8px;padding:6px 12px}'
+      + '.lcg-bc{gap:8px' + (py === null && px === null ? ';padding:6px 12px' : '') + '}'
       + '.lcg-bc-txt{font-size:14px}'
       + '.lcg-avs .lcg-av:nth-child(n+4){display:none}'
       + '.lcg-sep{margin:0 6px}'

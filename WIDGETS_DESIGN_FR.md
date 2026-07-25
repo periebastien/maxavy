@@ -105,7 +105,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `theme` | Thème | enum | `light` | `light` `dark` `auto` | palette globale claire/sombre (`auto` = préférence visiteur) |
 | `lang` | Langue | enum | `fr` | `fr` `en` `auto` | libellés + format dates et nombres (virgule décimale en FR) |
 | `minRating` | Note minimale | number | `0` | 0–5 | n'affiche/compte que les avis ≥ seuil (filtre **symétrique** note moyenne + total + liste) |
-| `containerPadding` | Marge intérieure | number | `16` | 0–64 (px) | espacement interne du conteneur (`.lcg-wrap` badge / `.lcg-car` carrousel) |
+| `containerPadding` | Marge extérieure (badge) / Marge intérieure (carrousel) | number | `16` | 0–64 (px) | espacement du conteneur — autour du badge (`.lcg-wrap`) / interne au carrousel (`.lcg-car`) |
 | `backgroundColor` | Couleur de fond | color | `auto` | `auto` · `transparent` · `#hex` | fond du widget — **`transparent`** épouse le fond du site ; `auto` = surface du thème (blanc clair / panneau sombre) |
 | `fontFamily` | Police | enum | `inherit` | `inherit` `system` `inter` `roboto` `poppins` `georgia` | **`inherit`** = police du site ; les autres chargées via Google Fonts dans l'embed |
 | `textColor` | Couleur du texte | color | `auto` | `auto` · `#hex` | texte principal (`auto` = dérivé du thème) |

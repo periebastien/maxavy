@@ -32,7 +32,7 @@ const COMMON = {
   showGoogleLogo: true, showGoogleLabel: true, googleUrl: '', showPoweredBy: true,
 }
 const BADGE = {
-  shape: 'pill', size: 'medium', align: 'center', showShadow: true,
+  shape: 'pill', size: 'medium', align: 'center', paddingY: -1, paddingX: -1, showShadow: true,
   showAvatars: true, avatarsCount: 4, showStars: true, starStyle: 'fractional',
   showRatingValue: true, showReviewCount: true, qualityLabel: 'auto', ctaText: '',
 }
@@ -59,7 +59,8 @@ export const FIELDS = [
   // ---- COMMUN · apparence
   { scope: 'common', key: 'theme', label: 'Thème', type: 'enum', section: 'apparence', options: [['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Auto']] },
   { scope: 'common', key: 'backgroundColor', label: 'Fond', type: 'color', section: 'apparence', allowAuto: true, allowTransparent: true, allowOpacity: true },
-  { scope: 'common', key: 'containerPadding', label: 'Marge intérieure (px)', type: 'number', section: 'apparence', min: 0, max: 64, step: 1 },
+  { scope: 'common', key: 'containerPadding', label: 'Marge extérieure (px)', type: 'number', section: 'apparence', min: 0, max: 64, step: 1, styles: ['compact', 'framed'], note: 'Espace autour du badge' },
+  { scope: 'common', key: 'containerPadding', label: 'Marge intérieure (px)', type: 'number', section: 'apparence', min: 0, max: 64, step: 1, styles: ['slider', 'grid', 'list'] },
   { scope: 'common', key: 'fontFamily', label: 'Police', type: 'enum', section: 'apparence', note: '« Du site » = police du site où le widget est intégré', options: [['inherit', 'Du site'], ['system', 'Système'], ['inter', 'Inter'], ['roboto', 'Roboto'], ['poppins', 'Poppins'], ['georgia', 'Georgia']] },
   { scope: 'common', key: 'textColor', label: 'Texte', type: 'color', section: 'apparence', allowAuto: true },
   { scope: 'common', key: 'mutedColor', label: 'Texte secondaire', type: 'color', section: 'apparence', allowAuto: true },
@@ -76,6 +77,8 @@ export const FIELDS = [
   { scope: 'badge', key: 'shape', label: 'Forme', type: 'enum', section: 'apparence', options: [['pill', 'Pilule'], ['rounded', 'Arrondi'], ['square', 'Carré']] },
   { scope: 'badge', key: 'size', label: 'Taille', type: 'enum', section: 'apparence', options: [['small', 'Petite'], ['medium', 'Moyenne'], ['large', 'Grande']] },
   { scope: 'badge', key: 'align', label: 'Alignement', type: 'enum', section: 'apparence', options: [['left', 'Gauche'], ['center', 'Centre'], ['right', 'Droite']] },
+  { scope: 'badge', key: 'paddingY', label: 'Padding vertical (px)', type: 'number', section: 'apparence', min: -1, max: 64, step: 1, note: '-1 = automatique (selon la taille)' },
+  { scope: 'badge', key: 'paddingX', label: 'Padding horizontal (px)', type: 'number', section: 'apparence', min: -1, max: 64, step: 1, note: '-1 = automatique (selon la taille)' },
   { scope: 'badge', key: 'showShadow', label: 'Ombre', type: 'bool', section: 'apparence' },
   // ---- BADGE · contenu
   { scope: 'badge', key: 'showAvatars', label: 'Avatars', type: 'bool', section: 'contenu' },
