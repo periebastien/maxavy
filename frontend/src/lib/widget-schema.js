@@ -34,7 +34,7 @@ const COMMON = {
 const BADGE = {
   shape: 'pill', size: 'medium', align: 'center', paddingY: -1, paddingX: -1, showShadow: true,
   showAvatars: true, avatarsCount: 4, showStars: true, starStyle: 'fractional',
-  showRatingValue: true, showReviewCount: true, qualityLabel: 'auto', ctaText: '',
+  showRatingValue: true, showReviewCount: true, googleMark: 'text', qualityLabel: 'auto', ctaText: '',
 }
 const CAROUSEL = {
   cardsDesktop: 3, cardsMobile: 1, autoplay: true, intervalMs: 4000, pauseOnHover: true,
@@ -69,8 +69,7 @@ export const FIELDS = [
   { scope: 'common', key: 'accentColor', label: 'Accent (flèches/points)', type: 'color', section: 'apparence', styles: ['slider'] },
   // ---- COMMUN · contenu
   { scope: 'common', key: 'minRating', label: 'Note minimale affichée', type: 'number', section: 'contenu', min: 0, max: 5, step: 1 },
-  { scope: 'common', key: 'showGoogleLogo', label: 'Logo Google', type: 'bool', section: 'contenu' },
-  { scope: 'common', key: 'showGoogleLabel', label: 'Mention « Google »', type: 'bool', section: 'contenu' },
+  { scope: 'common', key: 'showGoogleLogo', label: 'Logo Google', type: 'bool', section: 'contenu', styles: ['slider', 'grid', 'list'], note: 'En-tête récap + coin des cartes' },
   { scope: 'common', key: 'showPoweredBy', label: 'Propulsé par GMB Manager', type: 'bool', section: 'contenu', note: 'Verrouillé en plan gratuit' },
 
   // ---- BADGE · apparence
@@ -86,6 +85,7 @@ export const FIELDS = [
   { scope: 'badge', key: 'showStars', label: 'Étoiles', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'showRatingValue', label: 'Note chiffrée', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'showReviewCount', label: 'Nombre d\'avis', type: 'bool', section: 'contenu' },
+  { scope: 'badge', key: 'googleMark', label: 'Mention Google', type: 'enum', section: 'contenu', note: 'Le logo seul rend le badge plus compact', options: [['text', 'Texte « Google »'], ['logo', 'Logo G'], ['both', 'Texte + logo'], ['none', 'Aucune']] },
   { scope: 'badge', key: 'starStyle', label: 'Style étoiles', type: 'enum', section: 'contenu', styles: ['framed'], options: [['fractional', 'Fractionnaire'], ['rounded', 'Arrondi']] },
   { scope: 'badge', key: 'qualityLabel', label: 'Libellé (auto / texte)', type: 'text', section: 'contenu', styles: ['framed'] },
   { scope: 'badge', key: 'ctaText', label: 'Texte du lien (vide = aucun)', type: 'text', section: 'contenu' },

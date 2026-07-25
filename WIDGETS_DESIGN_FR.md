@@ -113,8 +113,8 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `starColor` | Couleur des étoiles | color | `#FBBC04` | `#hex` | étoiles (défaut or Google) |
 | `borderColor` | Couleur des bordures | color | `auto` | `auto` · `transparent` · `#hex` | bordures pilule/cartes — `transparent` = sans bordure |
 | `accentColor` | Couleur d'accent | color | `#7C5CFC` | `#hex` | flèches + points du carrousel (jamais les étoiles ni le badge) |
-| `showGoogleLogo` | Logo Google | bool | `true` | | affiche le « G » Google |
-| `showGoogleLabel` | Mention « Google » | bool | `true` | | « Google » à côté de la note |
+| `showGoogleLogo` | Logo Google | bool | `true` | | **carrousel uniquement** — « G » dans l'en-tête récap + coin des cartes (non exposé pour le badge : il n'y agissait pas) |
+| `showGoogleLabel` | — | bool | `true` | | **déprécié** : remplacé par `badge.googleMark`. Conservé en base et lu comme fallback (`false` → `googleMark: 'none'`), plus exposé dans le builder |
 | `googleUrl` | Lien Google | text | `""` | | vide = dérivé de `Location.google_place_id` ; `null` si widget multi-localisations (non cliquable) |
 | `showPoweredBy` | « Propulsé par Locagain » | bool | `true` | | **verrouillé `true` côté serveur en plan gratuit** (levier commercial) |
 
@@ -132,6 +132,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `starStyle` | Style étoiles | enum | `fractional` | `fractional` `rounded` | framed |
 | `showRatingValue` | Note chiffrée | bool | `true` | | both |
 | `showReviewCount` | Nombre d'avis | bool | `true` | | both |
+| `googleMark` | Mention Google | enum | `text` | `text` · `logo` · `both` · `none` | compact : mot « Google » et/ou G multicolore (15 px) après la note — `logo` fait gagner ~35 px de largeur. framed : le G (20 px) coiffe la carte, le mot suit « 25 avis Google » / « 25 avis » |
 | `qualityLabel` | Libellé qualitatif | text | `auto` | `auto` · `""` · texte libre | framed (`auto` : ≥4,5 Excellent, ≥4 Très bien…) |
 | `ctaText` | Texte du lien | text | `""` | `""` = aucun CTA | affiché sous le badge (`.lcg-cta`), cliquable, seulement si `googleUrl` résolu |
 

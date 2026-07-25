@@ -29,6 +29,7 @@ const BADGE_DEFAULTS = {
   starStyle: 'fractional',
   showRatingValue: true,
   showReviewCount: true,
+  googleMark: 'text',
   qualityLabel: 'auto',
   ctaText: '',
 }
@@ -69,6 +70,7 @@ const ENUMS = {
   size: ['small', 'medium', 'large'],
   align: ['left', 'center', 'right'],
   starStyle: ['fractional', 'rounded'],
+  googleMark: ['text', 'logo', 'both', 'none'],
   dateFormat: ['relative', 'absolute'],
   sort: ['recent', 'highest', 'lowest', 'random'],
   cardShadow: ['none', 'soft', 'medium', 'strong'],
@@ -145,13 +147,12 @@ function mergeDefaults(type, config) {
   const cfg = config && typeof config === 'object' ? config : {}
   const styles = STYLES[type] || STYLES.carousel
   const style = styles.includes(cfg.style) ? cfg.style : (DEFAULT_STYLE[type] || styles[0])
-  return {
-    version: 1,
-    style,
-    common: sanitizeSection(COMMON_DEFAULTS, cfg.common),
-    badge: sanitizeSection(BADGE_DEFAULTS, cfg.badge),
-    carousel: sanitizeSection(CAROUSEL_DEFAULTS, cfg.carousel),
-  }
+  const common = sanitizeSection(COMMON_DEFAULTS, cfg.common)
+  const badge = sanitizeSection(BADGE_DEFAULTS, cfg.badge)
+  // Rétrocompat : googleMark remplace l'ancienne case showGoogleLabel (badge uniquement).
+  const hadMark = cfg.badge && typeof cfg.badge === 'object' && 'googleMark' in cfg.badge
+  if (!hadMark && common.showGoogleLabel === false) badge.googleMark = 'none'
+  return { version: 1, style, common, badge, carousel: sanitizeSection(CAROUSEL_DEFAULTS, cfg.carousel) }
 }
 
 module.exports = {

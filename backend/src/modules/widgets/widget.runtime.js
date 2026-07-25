@@ -155,25 +155,34 @@ function LOCAGAIN_RUNTIME() {
       + (px !== null ? px : (b.size === 'large' ? 38 : b.size === 'small' ? 20 : 30)) + 'px'
     var fradius = b.shape === 'square' ? '6px' : b.shape === 'pill' ? '24px' : '14px'
     var starAvg = b.starStyle === 'rounded' ? Math.round(avg) : avg
+    // googleMark : text = mot « Google », logo = G multicolore, both = les deux, none = rien.
+    var mark = b.googleMark || (c.showGoogleLabel === false ? 'none' : 'text')
+    var markWord = mark === 'text' || mark === 'both'
+    var markLogo = mark === 'logo' || mark === 'both'
     var inner = ''
     if (b.showAvatars) inner += avatars(payload.reviews, b.avatarsCount, pal.bg)
     if (payload.style === 'framed') {
       var stars = b.showStars ? starsRow(starAvg, pal.star, 18) : ''
       var label = b.qualityLabel === '' ? '' : '<div class="lcg-bf-label">' + esc(b.qualityLabel === 'auto' ? qualityText(avg, c.lang) : b.qualityLabel) + '</div>'
+      var word = markWord ? (c.lang === 'en' ? ' Google reviews' : ' avis Google') : (c.lang === 'en' ? ' reviews' : ' avis')
       var line = (b.showRatingValue ? num1(c.lang, avg) + (c.lang === 'en' ? ' out of 5' : ' sur 5') : '')
-        + (b.showReviewCount ? (b.showRatingValue ? ' · ' : '') + count + (c.lang === 'en' ? ' Google reviews' : ' avis Google') : '')
+        + (b.showReviewCount ? (b.showRatingValue ? ' · ' : '') + count + word : '')
+      if (markLogo) inner += '<span class="lcg-bf-g">' + googleG(20) + '</span>'
       inner = '<div class="lcg-bf">' + inner + label + (stars ? '<div>' + stars + '</div>' : '') + (line ? '<div class="lcg-bf-line">' + line + '</div>' : '') + '</div>'
     } else {
       var star1 = b.showStars ? star(17, pal.star) : ''
-      var txt = (b.showRatingValue ? num1(c.lang, avg) : '') + (c.showGoogleLabel ? ' Google' : '')
+      var txt = (b.showRatingValue ? num1(c.lang, avg) : '') + (markWord ? ' Google' : '')
+      var glogo = markLogo ? '<span class="lcg-bc-g' + (txt ? ' lcg-bc-g-sp' : '') + '">' + googleG(15) + '</span>' : ''
       var cnt = b.showReviewCount ? '<span class="lcg-sep"></span>' + count + (c.lang === 'en' ? ' reviews' : ' avis') : ''
-      inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + cnt + '</strong>'
+      inner += star1 + '<strong class="lcg-bc-txt">' + esc(txt) + glogo + cnt + '</strong>'
     }
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
     var justify = b.align === 'center' ? 'center' : b.align === 'right' ? 'flex-end' : 'flex-start'
     var css = '.lcg-bc{display:inline-flex;align-items:center;gap:12px;padding:' + pad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + '}'
       + '.lcg-bc-txt{font-size:15px;font-weight:500;color:' + pal.text + ';white-space:nowrap}'
       + '.lcg-sep{display:inline-block;width:1px;height:13px;background:' + pal.border + ';margin:0 8px;vertical-align:-2px}'
+      + '.lcg-bc-g{display:inline-block;vertical-align:-2px;line-height:0}.lcg-bc-g-sp{margin-left:5px}'
+      + '.lcg-bf-g{display:block;line-height:0;margin-bottom:2px}'
       + '.lcg-bf{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:' + fpad + ';background:' + pal.bg + ';border:1px solid ' + pal.border + ';border-radius:' + fradius + ';box-shadow:' + (b.showShadow ? shadow('soft') : 'none') + ';text-align:center}'
       + '.lcg-bf-label{font-size:17px;font-weight:500;color:' + pal.text + '}'
       + '.lcg-bf-line{font-size:13px;color:' + pal.muted + '}'
