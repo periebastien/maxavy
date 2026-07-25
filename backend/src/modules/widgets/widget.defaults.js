@@ -30,6 +30,7 @@ const BADGE_DEFAULTS = {
   showRatingValue: true,
   showReviewCount: true,
   googleMark: 'text',
+  showSeparator: true,
   qualityLabel: 'auto',
   ctaText: '',
 }

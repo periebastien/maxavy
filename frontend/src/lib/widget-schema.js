@@ -34,7 +34,7 @@ const COMMON = {
 const BADGE = {
   shape: 'pill', size: 'medium', align: 'center', paddingY: -1, paddingX: -1, showShadow: true,
   showAvatars: true, avatarsCount: 4, showStars: true, starStyle: 'fractional',
-  showRatingValue: true, showReviewCount: true, googleMark: 'text', qualityLabel: 'auto', ctaText: '',
+  showRatingValue: true, showReviewCount: true, googleMark: 'text', showSeparator: true, qualityLabel: 'auto', ctaText: '',
 }
 const CAROUSEL = {
   cardsDesktop: 3, cardsMobile: 1, autoplay: true, intervalMs: 4000, pauseOnHover: true,
@@ -86,6 +86,7 @@ export const FIELDS = [
   { scope: 'badge', key: 'showRatingValue', label: 'Note chiffrée', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'showReviewCount', label: 'Nombre d\'avis', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'googleMark', label: 'Mention Google', type: 'enum', section: 'contenu', note: 'Le logo seul rend le badge plus compact', options: [['text', 'Texte « Google »'], ['logo', 'Logo G'], ['both', 'Texte + logo'], ['none', 'Aucune']] },
+  { scope: 'badge', key: 'showSeparator', label: 'Barre de séparation', type: 'bool', section: 'contenu', styles: ['compact'], note: 'Trait vertical avant le nombre d\'avis' },
   { scope: 'badge', key: 'starStyle', label: 'Style étoiles', type: 'enum', section: 'contenu', styles: ['framed'], options: [['fractional', 'Fractionnaire'], ['rounded', 'Arrondi']] },
   { scope: 'badge', key: 'qualityLabel', label: 'Libellé (auto / texte)', type: 'text', section: 'contenu', styles: ['framed'] },
   { scope: 'badge', key: 'ctaText', label: 'Texte du lien (vide = aucun)', type: 'text', section: 'contenu' },
