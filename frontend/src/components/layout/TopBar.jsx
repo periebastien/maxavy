@@ -65,7 +65,7 @@ function BusinessSelector() {
             >
               {/* Zone de sélection */}
               <button
-                onClick={() => { setActiveBusiness(b); setOpen(false) }}
+                onClick={() => { setActiveBusiness(b); setOpen(false); navigate('/dashboard') }}
                 className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
               >
                 <EntityAvatar name={b.name} src={faviconUrl(b.website_url)} size={26} shape="circle" />

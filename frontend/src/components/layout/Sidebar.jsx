@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Eye, MessageSquare, Users, Mail,
   QrCode, LayoutTemplate, BarChart2, FileText, Image, LogOut, ChevronDown, Plus, User, Globe, Zap, CreditCard, X,
@@ -118,9 +118,17 @@ function NavItem({ item, onClose }) {
 function LocationSelector({ onClose }) {
   const { locations, activeLocation, setActiveLocation } = useLocations()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useClickOutside(ref, () => setOpen(false), open)
+
+  function selectLocation(loc) {
+    setActiveLocation(loc)
+    setOpen(false)
+    // Page à détail (ressource liée à l'ancienne localisation) → retour au tableau de bord
+    if (/^\/widgets\/(?!new$)[^/]+$/.test(pathname)) navigate('/dashboard')
+  }
 
   return (
     <div ref={ref} className="relative px-3 pb-3 border-b border-border">
@@ -144,7 +152,7 @@ function LocationSelector({ onClose }) {
           {locations.map(loc => (
             <button
               key={loc.id}
-              onClick={() => { setActiveLocation(loc); setOpen(false); onClose?.() }}
+              onClick={() => { selectLocation(loc); onClose?.() }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-bg-page transition-colors border-b border-border last:border-0 ${loc.id === activeLocation?.id ? 'bg-accent-light' : ''}`}
             >
               <EntityAvatar name={loc.name} src={faviconUrl(loc.website_url)} size={28} />
