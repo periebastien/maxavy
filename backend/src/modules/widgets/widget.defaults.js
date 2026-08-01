@@ -33,6 +33,7 @@ const BADGE_DEFAULTS = {
   showSeparator: true,
   qualityLabel: 'auto',
   ctaText: '',
+  avatarSize: 30,
 }
 
 const CAROUSEL_DEFAULTS = {
@@ -54,10 +55,16 @@ const CAROUSEL_DEFAULTS = {
   sort: 'recent',
   limit: 20,
   showHeader: true,
+  headerPosition: 'left',
+  headerQualityLabel: 'auto',
+  headerGoogleMark: 'text',
+  headerTextColor: 'auto',
+  headerMutedColor: 'auto',
   cardBackgroundColor: 'auto',
   cardRadius: 12,
   cardShadow: 'soft',
   gap: 16,
+  avatarSize: 30,
 }
 
 const STYLES = { badge: ['compact', 'framed'], carousel: ['slider', 'grid', 'list'] }
@@ -72,6 +79,8 @@ const ENUMS = {
   align: ['left', 'center', 'right'],
   starStyle: ['fractional', 'rounded'],
   googleMark: ['text', 'logo', 'both', 'none'],
+  headerGoogleMark: ['text', 'logo', 'both', 'none'],
+  headerPosition: ['left', 'top'],
   dateFormat: ['relative', 'absolute'],
   sort: ['recent', 'highest', 'lowest', 'random'],
   cardShadow: ['none', 'soft', 'medium', 'strong'],
@@ -90,10 +99,11 @@ const NUM_BOUNDS = {
   limit: [1, 50],
   cardRadius: [0, 32],
   gap: [0, 48],
+  avatarSize: [20, 64],
 }
 
-const COLOR_KEYS = new Set(['backgroundColor', 'textColor', 'mutedColor', 'starColor', 'borderColor', 'accentColor', 'cardBackgroundColor'])
-const TEXT_MAX = { qualityLabel: 40, ctaText: 40, googleUrl: 300 }
+const COLOR_KEYS = new Set(['backgroundColor', 'textColor', 'mutedColor', 'starColor', 'borderColor', 'accentColor', 'cardBackgroundColor', 'headerTextColor', 'headerMutedColor'])
+const TEXT_MAX = { qualityLabel: 40, ctaText: 40, googleUrl: 300, headerQualityLabel: 40 }
 const HEX_RE = /^#[0-9a-fA-F]{3,8}$/
 
 function sanitizeColor(val, def) {

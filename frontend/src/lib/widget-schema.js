@@ -35,12 +35,15 @@ const BADGE = {
   shape: 'pill', size: 'medium', align: 'center', paddingY: -1, paddingX: -1, showShadow: true,
   showAvatars: true, avatarsCount: 4, showStars: true, starStyle: 'fractional',
   showRatingValue: true, showReviewCount: true, googleMark: 'text', showSeparator: true, qualityLabel: 'auto', ctaText: '',
+  avatarSize: 30,
 }
 const CAROUSEL = {
   cardsDesktop: 3, cardsMobile: 1, autoplay: true, intervalMs: 4000, pauseOnHover: true,
   showArrows: true, showDots: true, showAvatar: true, showAuthorName: true, showDate: true,
   dateFormat: 'relative', showStars: true, maxChars: 180, showReadMore: true, requireText: false,
-  sort: 'recent', limit: 20, showHeader: true, cardBackgroundColor: 'auto', cardRadius: 12, cardShadow: 'soft', gap: 16,
+  sort: 'recent', limit: 20, showHeader: true,
+  headerPosition: 'left', headerQualityLabel: 'auto', headerGoogleMark: 'text', headerTextColor: 'auto', headerMutedColor: 'auto',
+  cardBackgroundColor: 'auto', cardRadius: 12, cardShadow: 'soft', gap: 16, avatarSize: 30,
 }
 
 export function defaultConfig(type) {
@@ -79,6 +82,7 @@ export const FIELDS = [
   { scope: 'badge', key: 'paddingY', label: 'Padding vertical (px)', type: 'number', section: 'apparence', min: -1, max: 64, step: 1, note: '-1 = automatique (selon la taille)' },
   { scope: 'badge', key: 'paddingX', label: 'Padding horizontal (px)', type: 'number', section: 'apparence', min: -1, max: 64, step: 1, note: '-1 = automatique (selon la taille)' },
   { scope: 'badge', key: 'showShadow', label: 'Ombre', type: 'bool', section: 'apparence' },
+  { scope: 'badge', key: 'avatarSize', label: 'Taille des avatars (px)', type: 'number', section: 'apparence', min: 20, max: 64, step: 1 },
   // ---- BADGE · contenu
   { scope: 'badge', key: 'showAvatars', label: 'Avatars', type: 'bool', section: 'contenu' },
   { scope: 'badge', key: 'avatarsCount', label: 'Nombre d\'avatars', type: 'number', section: 'contenu', min: 1, max: 8, step: 1 },
@@ -98,8 +102,14 @@ export const FIELDS = [
   { scope: 'carousel', key: 'cardRadius', label: 'Arrondi des cartes', type: 'number', section: 'apparence', min: 0, max: 32, step: 1 },
   { scope: 'carousel', key: 'cardShadow', label: 'Ombre des cartes', type: 'enum', section: 'apparence', options: [['none', 'Aucune'], ['soft', 'Légère'], ['medium', 'Moyenne'], ['strong', 'Forte']] },
   { scope: 'carousel', key: 'gap', label: 'Espacement', type: 'number', section: 'apparence', min: 0, max: 48, step: 1 },
+  { scope: 'carousel', key: 'avatarSize', label: 'Taille des avatars (px)', type: 'number', section: 'apparence', min: 20, max: 64, step: 1 },
   // ---- CARROUSEL · contenu
   { scope: 'carousel', key: 'showHeader', label: 'En-tête récap', type: 'bool', section: 'contenu' },
+  { scope: 'carousel', key: 'headerPosition', label: 'Position de l\'en-tête', type: 'enum', section: 'contenu', when: [{ key: 'showHeader', equals: true }], options: [['left', 'À gauche'], ['top', 'En haut']] },
+  { scope: 'carousel', key: 'headerQualityLabel', label: 'Libellé (auto / texte)', type: 'text', section: 'contenu', when: [{ key: 'showHeader', equals: true }, { key: 'headerPosition', equals: 'left' }] },
+  { scope: 'carousel', key: 'headerGoogleMark', label: 'Mention Google (en-tête)', type: 'enum', section: 'contenu', when: [{ key: 'showHeader', equals: true }, { key: 'headerPosition', equals: 'top' }], options: [['text', 'Texte « Google »'], ['logo', 'Logo G'], ['both', 'Texte + logo'], ['none', 'Aucune']] },
+  { scope: 'carousel', key: 'headerTextColor', label: 'Couleur texte en-tête', type: 'color', section: 'contenu', when: [{ key: 'showHeader', equals: true }], allowAuto: true },
+  { scope: 'carousel', key: 'headerMutedColor', label: 'Couleur secondaire en-tête', type: 'color', section: 'contenu', when: [{ key: 'showHeader', equals: true }], allowAuto: true },
   { scope: 'carousel', key: 'showAvatar', label: 'Avatar', type: 'bool', section: 'contenu' },
   { scope: 'carousel', key: 'showAuthorName', label: 'Nom', type: 'bool', section: 'contenu' },
   { scope: 'carousel', key: 'showDate', label: 'Date', type: 'bool', section: 'contenu' },
@@ -131,4 +141,10 @@ export function fieldsFor(type, style) {
     if (f.styles && !f.styles.includes(style)) return false
     return true
   })
+}
+
+// Affichage conditionnel : f.when = [{key, equals}, ...] (ET logique), valeurs lues dans config[f.scope].
+export function fieldVisible(f, config) {
+  if (!f.when) return true
+  return f.when.every(cond => config[f.scope][cond.key] === cond.equals)
 }

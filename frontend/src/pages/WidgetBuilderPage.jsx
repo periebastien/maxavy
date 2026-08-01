@@ -5,7 +5,7 @@ import AppLayout from '../components/layout/AppLayout'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLocations } from '../contexts/LocationContext'
 import api from '../lib/api'
-import { WIDGET_TYPES, DEFAULT_STYLE, SECTIONS, defaultConfig, fieldsFor } from '../lib/widget-schema'
+import { WIDGET_TYPES, DEFAULT_STYLE, SECTIONS, defaultConfig, fieldsFor, fieldVisible } from '../lib/widget-schema'
 
 function Toggle({ checked, onChange }) {
   return (
@@ -350,7 +350,7 @@ export default function WidgetBuilderPage() {
               </Accordion>
 
               {SECTIONS.map(([secKey, secLabel]) => {
-                const secFields = fields.filter(f => f.section === secKey)
+                const secFields = fields.filter(f => f.section === secKey && fieldVisible(f, config))
                 if (!secFields.length) return null
                 return (
                   <Accordion key={secKey} id={secKey} title={secLabel} openSet={openSections} toggle={toggleSection}>

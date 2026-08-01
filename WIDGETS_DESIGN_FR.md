@@ -2,7 +2,7 @@
 
 > Document de référence du catalogue de widgets Locagain (badges + carrousels d'avis Google).
 > Sert à : revenir facilement sur les designs, créer de nouveaux widgets, faire évoluer la config.
-> Dernière mise à jour : 2026-06-30.
+> Dernière mise à jour : 2026-08-01.
 > Voir aussi : `PROGRESS.md` (sessions 26→28), `CAHIER_CHARGES_MVP_EXTENSIBLE_FR.md` §MODULE 8.
 
 ---
@@ -128,6 +128,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `showShadow` | Ombre | bool | `true` | | both |
 | `showAvatars` | Avatars | bool | `true` | | both |
 | `avatarsCount` | Nombre d'avatars | number | `4` | 1–8 (borné à `reviews.length`) | both |
+| `avatarSize` | Taille des avatars (px) | number | `30` | 20–64 | both — police de l'initiale = taille×0,43, chevauchement des avatars empilés = -taille/3 |
 | `showStars` | Étoiles | bool | `true` | | compact=1 étoile, framed=5 |
 | `starStyle` | Style étoiles | enum | `fractional` | `fractional` `rounded` | framed |
 | `showRatingValue` | Note chiffrée | bool | `true` | | both |
@@ -148,6 +149,7 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `showArrows` | Flèches | bool | `true` | | slider |
 | `showDots` | Points | bool | `true` | | slider |
 | `showAvatar` | Avatar | bool | `true` | | all |
+| `avatarSize` | Taille des avatars (px) | number | `30` | 20–64 | all |
 | `showAuthorName` | Nom | bool | `true` | | all |
 | `showDate` | Date | bool | `true` | | all |
 | `dateFormat` | Format date | enum | `relative` | `relative` `absolute` | all |
@@ -158,6 +160,11 @@ Casse **camelCase**, forme imbriquée `{ version, style, common{}, badge{}, caro
 | `sort` | Tri | enum | `recent` | `recent` `highest` `lowest` `random` | all |
 | `limit` | Nombre d'avis | number | `20` | 1–50 (cap dur serveur 50) | all |
 | `showHeader` | En-tête récap | bool | `true` | | all |
+| `headerPosition` | Position de l'en-tête | enum | `left` | `left` `top` | visible seulement si `showHeader` — `left` : bloc vertical style Elfsight (libellé + grandes étoiles + logo Google complet), `top` : bandeau aligné sur le badge compact |
+| `headerQualityLabel` | Libellé (en-tête `left`) | text | `auto` | `auto` · `""` · texte libre | `left` uniquement (`auto` : ≥4,5 Excellent, ≥4 Très bien…), vide = masqué |
+| `headerGoogleMark` | Mention Google (en-tête `top`) | enum | `text` | `text` · `logo` · `both` · `none` | `top` uniquement |
+| `headerTextColor` | Couleur texte en-tête | color | `auto` | `auto` · `#hex` | `auto` = retombe sur `textColor` |
+| `headerMutedColor` | Couleur texte secondaire en-tête | color | `auto` | `auto` · `#hex` | `auto` = retombe sur `mutedColor` |
 | `cardRadius` | Arrondi cartes | number | `12` | 0–32 | all |
 | `cardShadow` | Ombre cartes | enum | `soft` | `none` `soft` `medium` `strong` | all |
 | `gap` | Espacement | number | `16` | 0–48 | all |
@@ -272,3 +279,14 @@ Le conteneur change selon `style` : `slider` (rangée + flèches `--lcg-accent` 
 - Réponse `/public` finale : `{ id, type, style, config, googleUrl, aggregate:{count,average}, reviews:[{id, author_name, rating, text, published_at}] }` — whitelist explicite par mapping ; `location_id`/`tag_id`/`updated_at` retirés (session 28, IDs internes non nécessaires à l'affichage).
 - Session 28 : « Lire plus » (`.lcg-rc-more`, bascule FR/EN, texte complet échappé en data-attr) ; `requireText` effectif au rendu ; badge `framed` sensible à `size`/`shape` ; `starStyle=rounded` ; `ctaText` rendu (`.lcg-cta`, vide = aucun, nécessite `googleUrl`) ; `showReadMore` + `ctaText` pilotables dans le builder.
 - **Aucune migration** (colonnes `type`/`config`/`embed_code`/`location_id`/`tag_id` déjà en place).
+
+## 9. En-tête carrousel + taille des avatars (2026-08-01)
+
+- **Avatars** : `badge.avatarSize`/`carousel.avatarSize` (px, `NUM_BOUNDS.avatarSize` 20–64), calculée dans `widget.runtime.js` selon `payload.type`. Police de l'initiale = taille×0,43 ; chevauchement des avatars empilés du badge = `-taille/3`.
+- **En-tête carrousel** (`carousel.headerPosition`, défaut `left`) :
+  - `left` (style Elfsight) : bloc vertical à gauche des cartes, 190px, centré verticalement (`.lcg-car-hl` + `.lcg-car-body` en flex row, repasse en colonne sous 640px) — libellé qualité (`headerQualityLabel`) en majuscules, grandes étoiles, « Basée sur **N avis** », logo Google complet multicolore (`googleWordmark()`, nouveau SVG). Fonctionne avec slider/grid/list.
+  - `top` : bandeau aligné sur le rendu du badge compact — G/moyenne/étoiles puis séparateur `.lcg-sep` (« | ») + « N avis Google », piloté par `headerGoogleMark`.
+  - `headerTextColor`/`headerMutedColor` : couleurs de l'en-tête indépendantes des cartes (`auto` = retombent sur `textColor`/`mutedColor`) — corrige le cas d'un en-tête invisible (texte clair pensé pour cartes sombres, sur fond de page clair).
+- **Champs conditionnels du builder** : `frontend/src/lib/widget-schema.js` exporte `fieldVisible(field, config)`, piloté par `when: [{ key, equals }]` sur la fiche de champ — utilisé dans `WidgetBuilderPage.jsx` pour n'afficher les réglages d'en-tête que si `showHeader` est actif, et pour ne montrer `headerQualityLabel` qu'en position `left` / `headerGoogleMark` qu'en position `top`.
+- Rétrocompatible (`mergeDefaults` complète les configs existantes), **aucune migration**. Le rendu par défaut des carrousels existants passe à l'en-tête `left` (changement de rendu volontaire, validé par l'utilisateur).
+- Fichiers : `backend/src/modules/widgets/widget.defaults.js`, `backend/src/modules/widgets/widget.runtime.js`, `frontend/src/lib/widget-schema.js`, `frontend/src/pages/WidgetBuilderPage.jsx`.

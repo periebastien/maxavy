@@ -58,6 +58,17 @@ function LOCAGAIN_RUNTIME() {
   function googleG(size) {
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>'
   }
+  function googleWordmark(h) {
+    var w = Math.round(h * 272 / 92)
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 272 92" aria-hidden="true">'
+      + '<path fill="#EA4335" d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>'
+      + '<path fill="#FBBC05" d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C119.25 34.32 129.24 25 141.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>'
+      + '<path fill="#4285F4" d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.66-13.07l8.48-3.53c1.51 3.61 5.21 7.87 11.17 7.87 7.31 0 11.84-4.51 11.84-13v-3.19h-.34c-2.18 2.69-6.38 5.04-11.68 5.04-11.09 0-21.25-9.66-21.25-22.09 0-12.52 10.16-22.26 21.25-22.26 5.29 0 9.49 2.35 11.68 4.96h.34v-3.61h9.25zm-8.56 20.92c0-7.81-5.21-13.52-11.84-13.52-6.72 0-12.35 5.71-12.35 13.52 0 7.73 5.63 13.36 12.35 13.36 6.63 0 11.84-5.63 11.84-13.36z"/>'
+      + '<path fill="#34A853" d="M225 3v65h-9.5V3h9.5z"/>'
+      + '<path fill="#EA4335" d="M262.02 54.48l7.56 5.04c-2.44 3.61-8.32 9.83-18.48 9.83-12.6 0-22.01-9.74-22.01-22.18 0-13.19 9.49-22.18 20.92-22.18 11.51 0 17.14 9.16 18.98 14.11l1.01 2.52-29.65 12.28c2.27 4.45 5.8 6.72 10.75 6.72 4.96 0 8.4-2.44 10.92-6.14zm-23.27-7.98l19.82-8.23c-1.09-2.77-4.37-4.7-8.23-4.7-4.95 0-11.84 4.37-11.59 12.93z"/>'
+      + '<path fill="#4285F4" d="M35.29 41.41V32H67c.31 1.64.47 3.58.47 5.68 0 7.06-1.93 15.79-8.15 22.01-6.05 6.3-13.78 9.66-24.02 9.66C16.32 69.35.36 53.89.36 34.91.36 15.93 16.32.47 35.3.47c10.5 0 17.98 4.12 23.6 9.49l-6.64 6.64c-4.03-3.78-9.49-6.72-16.97-6.72-13.86 0-24.7 11.17-24.7 25.03 0 13.86 10.84 25.03 24.7 25.03 8.99 0 14.11-3.61 17.39-6.89 2.66-2.66 4.41-6.46 5.1-11.65l-22.49.01z"/>'
+      + '</svg>'
+  }
   function qualityText(avg, lang) {
     var en = lang === 'en'
     if (avg >= 4.5) return en ? 'Excellent' : 'Excellent'
@@ -129,13 +140,16 @@ function LOCAGAIN_RUNTIME() {
 
   function shadow(p) { return p === 'none' ? 'none' : p === 'strong' ? '0 6px 24px rgba(0,0,0,.16)' : p === 'medium' ? '0 4px 16px rgba(0,0,0,.10)' : '0 2px 10px rgba(0,0,0,.06)' }
 
-  function baseCss(pal, cfg) {
+  function baseCss(pal, cfg, type) {
+    var avSize = (type === 'badge' ? cfg.badge.avatarSize : cfg.carousel.avatarSize) || 30
+    var avFont = Math.round(avSize * 0.43)
+    var avStack = Math.round(avSize / 3)
     return '.lcg-root{all:initial;font-family:' + pal.font + ';color:' + pal.text + ';display:block;box-sizing:border-box;-webkit-font-smoothing:antialiased}'
       + '.lcg-root *{box-sizing:border-box}'
       + '.lcg-stars{display:inline-flex;gap:1px;vertical-align:middle}'
-      + '.lcg-av{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;color:#fff;font-size:13px;font-weight:500;border:2px solid ' + pal.bg + '}'
+      + '.lcg-av{display:inline-flex;align-items:center;justify-content:center;width:' + avSize + 'px;height:' + avSize + 'px;border-radius:50%;color:#fff;font-size:' + avFont + 'px;font-weight:500;border:2px solid ' + pal.bg + '}'
       + '.lcg-av-img{object-fit:cover;background:#eaeaea;color:transparent}'
-      + '.lcg-avs{display:inline-flex}.lcg-avs .lcg-av+.lcg-av{margin-left:-10px}'
+      + '.lcg-avs{display:inline-flex}.lcg-avs .lcg-av+.lcg-av{margin-left:-' + avStack + 'px}'
       + '.lcg-link{color:inherit;text-decoration:none}'
       + '.lcg-pb{margin-top:8px;font-size:11px;color:' + pal.muted + ';text-align:center}'
       + '.lcg-pb a{color:' + pal.muted + ';text-decoration:none}'
@@ -230,12 +244,35 @@ function LOCAGAIN_RUNTIME() {
   }
 
   function header(payload, pal) {
-    var c = payload.config.common
-    if (!payload.config.carousel.showHeader) return ''
-    var inner = (c.showGoogleLogo ? googleG(22) : '') + '<span class="lcg-hd-avg">' + num1(c.lang, payload.aggregate.average) + '</span>'
-      + starsRow(payload.aggregate.average, pal.star, 16)
-      + '<span class="lcg-hd-cnt">' + payload.aggregate.count + (c.lang === 'en' ? ' Google reviews' : ' avis Google') + '</span>'
-    var h = '<div class="lcg-hd">' + inner + '</div>'
+    var cfg = payload.config, cw = cfg.carousel, c = cfg.common
+    if (!cw.showHeader) return ''
+    var avg = payload.aggregate.average, count = payload.aggregate.count
+    var headerText = (!cw.headerTextColor || cw.headerTextColor === 'auto') ? pal.text : cw.headerTextColor
+    var headerMuted = (!cw.headerMutedColor || cw.headerMutedColor === 'auto') ? pal.muted : cw.headerMutedColor
+    var h
+    if (cw.headerPosition === 'top') {
+      var mark = cw.headerGoogleMark || 'text'
+      var markWord = mark === 'text' || mark === 'both'
+      var markLogo = mark === 'logo' || mark === 'both'
+      var glogo = markLogo ? '<span class="lcg-hdt-g">' + googleG(22) + '</span>' : ''
+      var avgTxt = '<span class="lcg-hdt-avg" style="color:' + headerText + '">' + num1(c.lang, avg) + '</span>'
+      var stars = starsRow(avg, pal.star, 16)
+      var cntTxt = count + (c.lang === 'en' ? ' reviews' : ' avis') + (markWord ? ' Google' : '')
+      var inner = glogo + avgTxt + stars + '<span class="lcg-sep"></span>' + '<span class="lcg-hdt-cnt" style="color:' + headerMuted + '">' + esc(cntTxt) + '</span>'
+      h = '<div class="lcg-hdt">' + inner + '</div>'
+    } else {
+      var qlRaw = cw.headerQualityLabel
+      var qualityLine = ''
+      if (qlRaw !== '') {
+        var qlText = (qlRaw === 'auto' || !qlRaw) ? qualityText(avg, c.lang) : qlRaw
+        qualityLine = '<div class="lcg-hdl-label" style="color:' + headerText + '">' + esc(String(qlText).toUpperCase()) + '</div>'
+      }
+      var basedText = c.lang === 'en' ? 'Based on ' : 'Basée sur '
+      var reviewsWord = c.lang === 'en' ? ' reviews' : ' avis'
+      var basedLine = '<div class="lcg-hdl-based" style="color:' + headerMuted + '">' + basedText + '<strong style="color:' + headerText + '">' + count + reviewsWord + '</strong></div>'
+      var glogoFull = '<div class="lcg-hdl-glogo">' + googleWordmark(24) + '</div>'
+      h = '<div class="lcg-hdl">' + qualityLine + '<div class="lcg-hdl-stars">' + starsRow(avg, pal.star, 26) + '</div>' + basedLine + glogoFull + '</div>'
+    }
     if (payload.googleUrl) h = '<a class="lcg-link" href="' + esc(payload.googleUrl) + '" target="_blank" rel="noopener nofollow">' + h + '</a>'
     return h
   }
@@ -257,12 +294,20 @@ function LOCAGAIN_RUNTIME() {
       body = '<div class="lcg-sl">' + prevBtn + '<div class="lcg-vp"><div class="lcg-track">' + cards + '</div></div>' + nextBtn + '</div>'
       if (cw.showDots) body += '<div class="lcg-dots"></div>'
     }
-    var content = '<div class="lcg-car">' + header(payload, pal) + body + '</div>'
+    var headerPart = header(payload, pal)
+    var isLeftHeader = !!cw.showHeader && cw.headerPosition !== 'top'
+    var content = isLeftHeader
+      ? '<div class="lcg-car lcg-car-hl">' + headerPart + '<div class="lcg-car-body">' + body + '</div></div>'
+      : '<div class="lcg-car">' + headerPart + body + '</div>'
     var radius = cw.cardRadius + 'px'
     var cpad = typeof cfg.common.containerPadding === 'number' ? cfg.common.containerPadding : 16
     var cardBg = (!cw.cardBackgroundColor || cw.cardBackgroundColor === 'auto') ? pal.bg : cw.cardBackgroundColor
     var css = '.lcg-car{background:' + pal.bg + ';border-radius:14px;padding:' + cpad + 'px}'
-      + '.lcg-hd{display:flex;align-items:center;gap:10px;padding:6px 2px 14px}.lcg-hd-avg{font-size:22px;font-weight:500;color:' + pal.text + '}.lcg-hd-cnt{font-size:13px;color:' + pal.muted + ';margin-left:auto}'
+      + '.lcg-car-hl{display:flex;gap:24px}.lcg-car-hl>*:first-child{flex:none;width:190px;align-self:center;text-align:center}.lcg-car-body{flex:1;min-width:0}'
+      + '@media(max-width:640px){.lcg-car-hl{flex-direction:column}.lcg-car-hl>*:first-child{width:auto}}'
+      + '.lcg-sep{display:inline-block;width:1px;height:.72em;background:currentColor;margin:0 5px}'
+      + '.lcg-hdt{display:flex;align-items:center;gap:6px;padding:6px 2px 14px}.lcg-hdt-avg{font-size:15px;font-weight:700}.lcg-hdt-g{display:inline-flex;line-height:0}.lcg-hdt-cnt{font-size:13px}'
+      + '.lcg-hdl{display:flex;flex-direction:column;align-items:center;gap:6px}.lcg-hdl-label{font-size:20px;font-weight:700;letter-spacing:.02em}.lcg-hdl-based{font-size:14px}.lcg-hdl-glogo{line-height:0;margin-top:2px}'
       + '.lcg-rc{background:' + cardBg + ';border:1px solid ' + pal.border + ';border-radius:' + radius + ';padding:14px 16px;box-shadow:' + shadow(cw.cardShadow) + '}'
       + '.lcg-rc-head{display:flex;align-items:center;gap:10px}.lcg-rc-id{flex:1;min-width:0}.lcg-rc-name{margin:0;font-size:14px;font-weight:500;color:' + pal.text + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lcg-rc-date{margin:0;font-size:12px;color:' + pal.muted + '}'
       + '.lcg-rc-stars{margin:9px 0 7px}.lcg-rc-text{margin:0;font-size:13px;line-height:1.55;color:' + pal.muted + '}'
@@ -357,7 +402,7 @@ function LOCAGAIN_RUNTIME() {
       : ''
     var part = payload.type === 'badge' ? badgeHtml(payload, pal, pbHtml) : carouselHtml(payload, pal)
     var outerPb = payload.type === 'badge' ? '' : pbHtml
-    root.innerHTML = '<style>' + baseCss(pal, cfg) + part.css + '</style><div class="lcg-root">' + part.html + outerPb + '</div>'
+    root.innerHTML = '<style>' + baseCss(pal, cfg, payload.type) + part.css + '</style><div class="lcg-root">' + part.html + outerPb + '</div>'
     if (!root.__lcgAvBound) {
       root.__lcgAvBound = true
       root.addEventListener('error', function (e) {
