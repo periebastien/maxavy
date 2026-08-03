@@ -30,6 +30,7 @@ const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const HomePage          = lazy(() => import('./pages/HomePage'))
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
 const LegalNoticePage   = lazy(() => import('./pages/LegalNoticePage'))
+const TermsPage         = lazy(() => import('./pages/TermsPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
 const GeogridSuiviPage       = lazy(() => import('./pages/GeogridSuiviPage'))
@@ -91,6 +92,7 @@ export default function App() {
       <Route path="/"                element={<Suspense fallback={null}><HomePage /></Suspense>} />
       <Route path="/confidentialite"    element={<Suspense fallback={null}><PrivacyPolicyPage /></Suspense>} />
       <Route path="/mentions-legales"   element={<Suspense fallback={null}><LegalNoticePage /></Suspense>} />
+      <Route path="/cgu"                element={<Suspense fallback={null}><TermsPage /></Suspense>} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )

@@ -27,6 +27,7 @@ export default function PublicLayout({ children }) {
           <span>© {new Date().getFullYear()} GMB Manager — édité par MAKEMERANK LIMITED</span>
           <nav className="flex gap-4">
             <Link to="/confidentialite" className="hover:text-text-secondary">Politique de confidentialité</Link>
+            <Link to="/cgu" className="hover:text-text-secondary">Conditions d'utilisation</Link>
             <Link to="/mentions-legales" className="hover:text-text-secondary">Mentions légales</Link>
           </nav>
         </div>
