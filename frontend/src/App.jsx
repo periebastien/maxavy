@@ -27,6 +27,9 @@ import AdminSchedulePage from './pages/AdminSchedulePage'
 import AdminCreditsPage from './pages/AdminCreditsPage'
 import AccountPage from './pages/AccountPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
+const HomePage          = lazy(() => import('./pages/HomePage'))
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
+const LegalNoticePage   = lazy(() => import('./pages/LegalNoticePage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
 const GeogridSuiviPage       = lazy(() => import('./pages/GeogridSuiviPage'))
@@ -85,7 +88,9 @@ export default function App() {
       <Route path="/admin/modules"           element={<PrivateRoute requireRole="superadmin"><AdminModulesPage /></PrivateRoute>} />
       <Route path="/admin/schedule"          element={<PrivateRoute requireRole="superadmin"><AdminSchedulePage /></PrivateRoute>} />
       <Route path="/admin/credits"           element={<PrivateRoute requireRole="superadmin"><AdminCreditsPage /></PrivateRoute>} />
-      <Route path="/"                element={<Navigate to="/dashboard" replace />} />
+      <Route path="/"                element={<Suspense fallback={null}><HomePage /></Suspense>} />
+      <Route path="/confidentialite"    element={<Suspense fallback={null}><PrivacyPolicyPage /></Suspense>} />
+      <Route path="/mentions-legales"   element={<Suspense fallback={null}><LegalNoticePage /></Suspense>} />
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
