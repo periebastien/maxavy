@@ -8,18 +8,18 @@ import PublicLayout from '../components/layout/PublicLayout'
 const GOOGLE_API_FEATURES = [
   {
     icon: Pencil,
-    title: 'Édition des fiches',
-    text: 'Modifiez les fiches d\'établissement de vos clients depuis une interface unique : horaires, coordonnées, description, attributs, photos.',
+    title: 'Édition des fiches — bientôt',
+    text: 'Vous pourrez bientôt modifier les fiches d\'établissement de vos clients depuis une interface unique : horaires, coordonnées, description, attributs, photos.',
   },
   {
     icon: MessageSquareReply,
-    title: 'Réponse aux avis',
-    text: 'Consultez et répondez aux avis de toutes vos fiches depuis la même interface, sans passer par Google fiche par fiche.',
+    title: 'Avis : consultation, et bientôt réponse',
+    text: 'Consultez dès aujourd\'hui les avis de toutes vos fiches dans GMB Manager. La réponse aux avis depuis cette même interface, sans passer par Google fiche par fiche, arrive prochainement.',
   },
   {
     icon: BarChart3,
-    title: 'Statistiques & mots-clés',
-    text: 'Statistiques de performance et mots-clés de recherche de chaque fiche, réunis dans un tableau de bord.',
+    title: 'Statistiques & mots-clés — bientôt',
+    text: 'Les statistiques de performance et les mots-clés de recherche de chaque fiche seront prochainement réunis dans votre tableau de bord.',
   },
   {
     icon: Building2,
@@ -109,7 +109,9 @@ export default function HomePage() {
           </h2>
           <p className="text-sm text-text-secondary mt-2 max-w-2xl mx-auto">
             En connectant votre compte Google (OAuth), GMB Manager agit uniquement sur les
-            fiches dont vous êtes propriétaire ou gestionnaire.
+            fiches dont vous êtes propriétaire ou gestionnaire. Ces fonctionnalités sont en
+            cours de déploiement dans le cadre de notre intégration des API Google Business
+            Profile.
           </p>
         </div>
         <FeatureGrid features={GOOGLE_API_FEATURES} />
