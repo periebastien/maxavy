@@ -59,10 +59,17 @@ app.use('/api/v1/admin/business-modules', require('./modules/admin-modules/admin
 app.use('/api/v1/admin/schedule', require('./modules/admin-schedule/admin-schedule.routes'))
 app.use('/api/v1/admin/credits', require('./modules/admin-credits/admin-credits.routes'))
 
+// --- Pages légales statiques (HTML pur, hors backend/public qui est écrasé au build) ---
+// Servies côté serveur pour être lisibles sans JavaScript (exigence de l'examen Google OAuth).
+const path = require('path')
+const legalDir = path.join(__dirname, 'static-pages')
+app.get('/confidentialite',  (req, res) => res.sendFile(path.join(legalDir, 'confidentialite.html')))
+app.get('/cgu',              (req, res) => res.sendFile(path.join(legalDir, 'cgu.html')))
+app.get('/mentions-legales', (req, res) => res.sendFile(path.join(legalDir, 'mentions-legales.html')))
+
 // --- Front statique : SPA React buildé et déposé dans backend/public ---
 // Sert les fichiers du build, puis renvoie index.html pour toute route non-API
 // (routing côté client React Router).
-const path = require('path')
 const clientDir = path.join(__dirname, '../public')
 app.use(express.static(clientDir))
 app.get('*', (req, res, next) => {

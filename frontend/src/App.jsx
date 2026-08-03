@@ -4,7 +4,6 @@ import { useAuth } from './contexts/AuthContext'
 import { useBusiness } from './contexts/BusinessContext'
 import PrivateRoute from './components/auth/PrivateRoute'
 import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import AcceptInvitationPage from './pages/AcceptInvitationPage'
@@ -28,9 +27,6 @@ import AdminCreditsPage from './pages/AdminCreditsPage'
 import AccountPage from './pages/AccountPage'
 const OnboardingPage    = lazy(() => import('./pages/OnboardingPage'))
 const HomePage          = lazy(() => import('./pages/HomePage'))
-const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'))
-const LegalNoticePage   = lazy(() => import('./pages/LegalNoticePage'))
-const TermsPage         = lazy(() => import('./pages/TermsPage'))
 const CollectPage       = lazy(() => import('./pages/CollectPage'))
 const GeogridConfigPage      = lazy(() => import('./pages/GeogridConfigPage'))
 const GeogridSuiviPage       = lazy(() => import('./pages/GeogridSuiviPage'))
@@ -60,7 +56,6 @@ export default function App() {
       <Route path="/avis/:businessSlug/:locationSlug" element={<Suspense fallback={null}><CollectPage /></Suspense>} />
 
       <Route path="/login"           element={<LoginPage />} />
-      <Route path="/register"        element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ResetPasswordPage />} />
       <Route path="/invitation"      element={<AcceptInvitationPage />} />
@@ -90,9 +85,8 @@ export default function App() {
       <Route path="/admin/schedule"          element={<PrivateRoute requireRole="superadmin"><AdminSchedulePage /></PrivateRoute>} />
       <Route path="/admin/credits"           element={<PrivateRoute requireRole="superadmin"><AdminCreditsPage /></PrivateRoute>} />
       <Route path="/"                element={<Suspense fallback={null}><HomePage /></Suspense>} />
-      <Route path="/confidentialite"    element={<Suspense fallback={null}><PrivacyPolicyPage /></Suspense>} />
-      <Route path="/mentions-legales"   element={<Suspense fallback={null}><LegalNoticePage /></Suspense>} />
-      <Route path="/cgu"                element={<Suspense fallback={null}><TermsPage /></Suspense>} />
+      {/* /confidentialite, /cgu, /mentions-legales : pages HTML statiques servies par le backend
+          (lisibles sans JS — exigence examen Google OAuth). Liens en <a> pour un chargement complet. */}
       <Route path="*"                element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )

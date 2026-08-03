@@ -26,9 +26,9 @@ export default function PublicLayout({ children }) {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-text-tertiary">
           <span>© {new Date().getFullYear()} GMB Manager — édité par MAKEMERANK LIMITED</span>
           <nav className="flex gap-4">
-            <Link to="/confidentialite" className="hover:text-text-secondary">Politique de confidentialité</Link>
-            <Link to="/cgu" className="hover:text-text-secondary">Conditions d'utilisation</Link>
-            <Link to="/mentions-legales" className="hover:text-text-secondary">Mentions légales</Link>
+            <a href="/confidentialite" className="hover:text-text-secondary">Politique de confidentialité</a>
+            <a href="/cgu" className="hover:text-text-secondary">Conditions d'utilisation</a>
+            <a href="/mentions-legales" className="hover:text-text-secondary">Mentions légales</a>
           </nav>
         </div>
       </footer>

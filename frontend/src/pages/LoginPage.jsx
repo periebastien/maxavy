@@ -91,10 +91,10 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-text-secondary mt-6">
-          Pas encore de compte ?{' '}
-          <Link to="/register" className="text-accent font-medium hover:underline">
-            S'inscrire
-          </Link>
+          Accès réservé aux clients de l'agence Makemerank —{' '}
+          <a href="mailto:contact@makemerank.net" className="text-accent font-medium hover:underline">
+            nous contacter
+          </a>
         </p>
       </div>
     </div>

@@ -6,13 +6,14 @@ const { sendResetEmail, sendPasswordChangedEmail } = require('../../services/mai
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
-async function register({ email, password, firstname, lastname }) {
-  const existing = await User.findOne({ where: { email } })
-  if (existing) throw { status: 409, message: 'Email déjà utilisé' }
-
-  const password_hash = await bcrypt.hash(password, 12)
-  const user = await User.create({ email, password_hash, firstname, lastname, auth_provider: 'local' })
-  return { user: sanitize(user), token: generateToken(user) }
+// Inscription libre fermée : l'accès est réservé aux clients de l'agence Makemerank.
+// Les comptes équipe sont créés via POST /team/accept (invitation) ; les comptes clients
+// sont créés dans le cadre de la relation commerciale avec l'agence.
+async function register() {
+  throw {
+    status: 403,
+    message: "L'accès à GMB Manager est réservé aux clients de l'agence Makemerank. Contactez contact@makemerank.net.",
+  }
 }
 
 async function login({ email, password }) {
@@ -41,10 +42,11 @@ async function googleAuth({ credential }) {
     if (user) {
       await user.update({ google_id, auth_provider: 'google', email_verified: true })
     } else {
-      user = await User.create({
-        email, firstname, lastname, avatar_url,
-        google_id, auth_provider: 'google', email_verified: true,
-      })
+      // Pas d'auto-création de compte via Google Sign-In : accès réservé aux clients de l'agence.
+      throw {
+        status: 403,
+        message: "L'accès à GMB Manager est réservé aux clients de l'agence Makemerank. Contactez contact@makemerank.net.",
+      }
     }
   }
 
