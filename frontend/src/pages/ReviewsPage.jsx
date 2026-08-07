@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Star, RefreshCw, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Star, RefreshCw, MessageSquare, ChevronLeft, ChevronRight, Download, ExternalLink } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import Badge from '../components/common/Badge'
 import Select from '../components/common/Select'
@@ -23,6 +23,23 @@ function StarRating({ value }) {
   )
 }
 
+function AuthorName({ review }) {
+  const className = 'text-sm font-medium text-text-primary'
+  if (!review.author_profile_url) {
+    return <p className={className}>{review.author_name || 'Anonyme'}</p>
+  }
+  return (
+    <a
+      href={review.author_profile_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${className} hover:text-accent hover:underline transition-colors`}
+    >
+      {review.author_name || 'Anonyme'}
+    </a>
+  )
+}
+
 function ReviewCard({ review }) {
   return (
     <div className="bg-white rounded-xl border border-border p-4 space-y-2">
@@ -30,11 +47,18 @@ function ReviewCard({ review }) {
         <div className="flex items-start gap-2.5 min-w-0">
           <EntityAvatar name={review.author_name} src={review.author_image_url} size={36} shape="circle" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-text-primary">{review.author_name || 'Anonyme'}</p>
+            <div className="flex items-center gap-1.5">
+              <AuthorName review={review} />
+              {review.author_is_local_guide === true && (
+                <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">Local Guide</Badge>
+              )}
+            </div>
             <p className="text-xs text-text-tertiary">
               {review.published_at
                 ? new Date(review.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
                 : '—'}
+              {Number.isInteger(review.author_reviews_count) &&
+                ` · ${review.author_reviews_count} avis`}
             </p>
           </div>
         </div>
@@ -45,6 +69,17 @@ function ReviewCard({ review }) {
               <MessageSquare size={10} className="mr-1" />
               Répondu
             </Badge>
+          )}
+          {review.review_url && (
+            <a
+              href={review.review_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Voir l'avis sur Google"
+              className="text-text-tertiary hover:text-accent transition-colors shrink-0"
+            >
+              <ExternalLink size={13} />
+            </a>
           )}
         </div>
       </div>
@@ -85,6 +120,7 @@ export default function ReviewsPage() {
   const [starFilter, setStarFilter] = useState('')
   const [isLoading, setIsLoading]   = useState(true)
   const [isSyncing, setIsSyncing]   = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [error, setError]           = useState(null)
   const [success, setSuccess]       = useState(null)
   const [syncStatus, setSyncStatus] = useState(null)
@@ -150,6 +186,19 @@ export default function ReviewsPage() {
     }
   }
 
+  async function handleExport() {
+    if (!activeBusiness || !locId) return
+    setIsExporting(true)
+    setError(null)
+    try {
+      await api.download(`/api/v1/reviews/export?business_id=${activeBusiness.id}&location_id=${locId}`)
+    } catch (err) {
+      setError(err.message || "Erreur lors de l'export")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / LIMIT)
 
   return (
@@ -160,15 +209,26 @@ export default function ReviewsPage() {
             <h1 className="text-xl font-semibold text-text-primary">Avis Google</h1>
             <p className="text-sm text-text-tertiary mt-0.5">{total} avis synchronisés</p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing}
-            icon={<RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />}
-          >
-            {isSyncing ? 'Synchronisation…' : 'Synchroniser'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleExport}
+              disabled={isExporting || reviews.length === 0 || !activeBusiness || !locId}
+              icon={<Download size={14} />}
+            >
+              {isExporting ? 'Export…' : 'Exporter'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleSync}
+              disabled={isSyncing}
+              icon={<RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />}
+            >
+              {isSyncing ? 'Synchronisation…' : 'Synchroniser'}
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">

@@ -150,6 +150,10 @@ async function upsertReviews(job, location, items) {
       platform:     'google',
       author_name:  it.authorName,
       author_image_url: it.authorImageUrl,
+      author_profile_url: it.profileUrl,
+      review_url:            it.reviewUrl,
+      author_is_local_guide: it.authorLocalGuide,
+      author_reviews_count:  it.authorReviewsCount,
       rating:       it.rating != null ? Math.round(it.rating) : null,
       text:         it.text,
       published_at: it.publishedAt ? new Date(it.publishedAt) : null,
@@ -549,6 +553,71 @@ async function listReviews(businessId, userId, { locationId, page = 1, limit = 2
   return { total: count, page, limit, reviews }
 }
 
+const DIACRITICS_RE = new RegExp('[̀-ͯ]', 'g')
+
+function slugify(str) {
+  return str
+    .normalize('NFD').replace(DIACRITICS_RE, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function starsLine(rating) {
+  if (rating == null) return '- **Note** : —'
+  return `- **Note** : ${'★'.repeat(rating)}${'☆'.repeat(5 - rating)} (${rating}/5)`
+}
+
+// ============ Export markdown des avis ============
+async function exportReviewsMarkdown(businessId, userId, { locationId } = {}) {
+  const business = await Business.findByPk(businessId)
+  if (!business) throw { status: 404, message: 'Entreprise introuvable' }
+  await assertAccess(business, userId)
+
+  const where = { business_id: businessId }
+  if (locationId) where.location_id = locationId
+
+  const reviews = await Review.findAll({ where, order: [['published_at', 'DESC']] })
+
+  let title = business.name
+  if (locationId) {
+    const location = await Location.findByPk(locationId)
+    if (location) title = location.name
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10)
+  const filename = `avis-${slugify(title)}-${dateStr}.md`
+
+  const lines = [`# Avis Google — ${title}`, '']
+  lines.push(`Export du ${new Date().toLocaleDateString('fr-FR')} — ${reviews.length} avis`)
+  lines.push('')
+
+  if (!reviews.length) {
+    lines.push('_Aucun avis à exporter._')
+  } else {
+    lines.push('---')
+    lines.push('')
+    for (const r of reviews) {
+      lines.push(`## ${r.author_name || 'Anonyme'}`)
+      lines.push('')
+      const bullets = [starsLine(r.rating)]
+      if (r.author_profile_url) bullets.push(`- **Profil** : ${r.author_profile_url}`)
+      if (r.author_is_local_guide === true) bullets.push('- **Local Guide** : oui')
+      if (Number.isInteger(r.author_reviews_count)) bullets.push(`- **Avis publiés par l'auteur** : ${r.author_reviews_count}`)
+      bullets.push(`- **Date** : ${r.published_at ? new Date(r.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}`)
+      if (r.review_url) bullets.push(`- **Lien de l'avis** : ${r.review_url}`)
+      lines.push(bullets.join('\n'))
+      lines.push('')
+      lines.push(r.text && r.text.trim() ? r.text : '_Aucun commentaire._')
+      lines.push('')
+      lines.push('---')
+      lines.push('')
+    }
+  }
+
+  return { filename, markdown: lines.join('\n').replace(/\n+$/, '\n') }
+}
+
 async function attachTags(rows) {
   const ids = rows.map(r => r.id)
   if (!ids.length) return rows.map(r => ({ ...r.toJSON(), tags: [] }))
@@ -724,7 +793,7 @@ async function triggerCompetitorSync(businessId, userId, locationId, placeId) {
 }
 
 module.exports = {
-  listReviews, setReviewTags, triggerSync, getSyncStatus,
+  listReviews, exportReviewsMarkdown, setReviewTags, triggerSync, getSyncStatus,
   enqueueDueLocations, pollRunningJobs, failStuckJobs,
   reconcileCompetitorTracking, enqueueDueCompetitors,
   getReviewsQuota, // exporté pour tests/diagnostic

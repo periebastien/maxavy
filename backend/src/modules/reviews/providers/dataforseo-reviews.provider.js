@@ -75,14 +75,19 @@ async function getTaskResult(taskId) {
   const result = task.result?.[0]
   if (!result) return null
   const items = (result.items || []).map(it => ({
-    reviewId:       it.review_id,
-    authorName:     it.profile_name || null,
-    authorImageUrl: it.profile_image_url || null,
-    rating:         it.rating?.value ?? null,
-    text:           it.review_text || null,
-    publishedAt:    it.timestamp || null,       // UTC
-    ownerAnswer:    it.owner_answer || null,
-    ownerTimestamp: it.owner_timestamp || null, // UTC
+    reviewId:           it.review_id,
+    authorName:         it.profile_name || null,
+    authorImageUrl:     it.profile_image_url || null,
+    profileUrl:         it.profile_url || null,
+    reviewUrl:          it.review_url || null,
+    // it.reviews_count = avis publiés par l'AUTEUR (à ne pas confondre avec result.reviews_count, total de la fiche)
+    authorLocalGuide:   typeof it.local_guide === 'boolean' ? it.local_guide : null,
+    authorReviewsCount: Number.isInteger(it.reviews_count) ? it.reviews_count : null,
+    rating:             it.rating?.value ?? null,
+    text:               it.review_text || null,
+    publishedAt:        it.timestamp || null,       // UTC
+    ownerAnswer:        it.owner_answer || null,
+    ownerTimestamp:     it.owner_timestamp || null, // UTC
   }))
   return { items, reviewsCount: result.reviews_count ?? items.length }
 }

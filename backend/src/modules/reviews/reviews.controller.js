@@ -14,6 +14,19 @@ async function list(req, res) {
   }
 }
 
+async function exportMarkdown(req, res) {
+  try {
+    const { location_id } = req.query
+    const { filename, markdown } = await service.exportReviewsMarkdown(req.query.business_id, req.user.id, { locationId: location_id })
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition')
+    res.send(markdown)
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message })
+  }
+}
+
 // Enqueue une synchro DataForSEO (asynchrone) — le front poll ensuite GET /sync/status.
 async function sync(req, res) {
   try {
@@ -61,4 +74,4 @@ async function competitorSync(req, res) {
   }
 }
 
-module.exports = { list, sync, syncStatus, setTags, competitorStats, competitorSync }
+module.exports = { list, exportMarkdown, sync, syncStatus, setTags, competitorStats, competitorSync }

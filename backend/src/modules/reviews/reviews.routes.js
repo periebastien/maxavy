@@ -4,6 +4,7 @@ const { authMiddleware } = require('../../middlewares/auth.middleware')
 
 router.use(authMiddleware)
 router.get('/',                  ctrl.list)
+router.get('/export',            ctrl.exportMarkdown)
 router.post('/sync',             ctrl.sync)
 router.get('/sync/status',       ctrl.syncStatus)
 router.get('/competitors/stats', ctrl.competitorStats)
